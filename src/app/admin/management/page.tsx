@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatTime } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 export default function AdminManagementPage() {
   const [activeTab, setActiveTab] = useState<"students" | "quizzes" | "results">("students");
@@ -44,72 +45,99 @@ export default function AdminManagementPage() {
     { id: "data-science", name: "Data Science", color: "from-orange-500/20 to-red-500/20", icon: BarChart3 },
   ];
 
+  // Load Session and Initial Data
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
     setAdminSession(session);
-    const adminRole = session.role || "super-admin";
-    const adminDomain = session.domain || "all";
-
-    const currentGlobal = JSON.parse(localStorage.getItem("global_students") || "[]");
-    const savedQuizzes = JSON.parse(localStorage.getItem("global_quizzes") || "[]");
-    const savedResults = JSON.parse(localStorage.getItem("global_results") || "[]");
-
-    let filteredS = currentGlobal;
-    let filteredQ = savedQuizzes;
-    let filteredR = savedResults;
-
-    if (adminRole === "domain-admin") {
-      filteredS = currentGlobal.filter((s: any) => s.domain === adminDomain);
-      filteredQ = savedQuizzes.filter((q: any) => q.domain === adminDomain);
-      filteredR = savedResults.filter((r: any) => r.domain === adminDomain);
-      setSelectedDomain(adminDomain); // Domain leaders are locked to their domain
+    
+    if (session.role === "domain-admin") {
+      setSelectedDomain(session.domain);
     }
 
-    setStudents(filteredS);
-    setQuizzes(filteredQ);
-    setResults(filteredR);
+    fetchAllData(session);
+
+    // Real-time Subscriptions
+    const resultsChannel = supabase
+      .channel('results_realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'results' }, (payload) => {
+        setResults(prev => [payload.new, ...prev]);
+      })
+      .subscribe();
+
+    const quizzesChannel = supabase
+      .channel('quizzes_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => {
+        fetchAllData(session);
+      })
+      .subscribe();
+
+    const studentsChannel = supabase
+      .channel('students_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => {
+        fetchAllData(session);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(resultsChannel);
+      supabase.removeChannel(quizzesChannel);
+      supabase.removeChannel(studentsChannel);
+    };
   }, []);
 
-  const handleAddStudent = () => {
-    if (!newRollNumber) return;
-    
-    const fullGlobal = JSON.parse(localStorage.getItem("global_students") || "[]");
-    if (fullGlobal.some((s: any) => s.rollNumber.toLowerCase() === newRollNumber.toLowerCase())) {
-      alert("Student already exists!");
-      return;
-    }
+  const fetchAllData = async (session: any) => {
+    const domainFilter = session.role === "domain-admin" ? session.domain : null;
 
-    const domainToAssign = adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain;
-    const newStudent = { id: Date.now().toString(), name: `Student ${newRollNumber}`, rollNumber: newRollNumber, email: `${newRollNumber}@nrtec.in`, password: newRollNumber, domain: domainToAssign };
-    
-    const updatedGlobal = [...fullGlobal, newStudent];
-    localStorage.setItem("global_students", JSON.stringify(updatedGlobal));
-    
-    // Update local state based on current filter
-    if (adminSession?.role === "super-admin") {
-      if (selectedDomain === domainToAssign || !selectedDomain) {
-        setStudents(prev => [...prev, newStudent]);
-      }
-    } else {
-      setStudents(prev => [...prev, newStudent]);
-    }
+    // Fetch Students
+    let studentsQuery = supabase.from('students').select('*').order('created_at', { ascending: false });
+    if (domainFilter) studentsQuery = studentsQuery.eq('domain', domainFilter);
+    const { data: sData } = await studentsQuery;
+    setStudents(sData || []);
 
-    setNewRollNumber("");
-    setIsAddModalOpen(false);
+    // Fetch Quizzes
+    let quizzesQuery = supabase.from('quizzes').select('*').order('created_at', { ascending: false });
+    if (domainFilter) quizzesQuery = quizzesQuery.eq('domain', domainFilter);
+    const { data: qData } = await quizzesQuery;
+    setQuizzes(qData || []);
+
+    // Fetch Results
+    let resultsQuery = supabase.from('results').select('*').order('timestamp', { ascending: false });
+    if (domainFilter) resultsQuery = resultsQuery.eq('domain', domainFilter);
+    const { data: rData } = await resultsQuery;
+    setResults(rData || []);
   };
 
-  const removeStudent = (id: string) => {
+  const handleAddStudent = async () => {
+    if (!newRollNumber) return;
+    
+    const domainToAssign = adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain;
+    
+    const { error } = await supabase
+      .from('students')
+      .insert([{
+        roll_number: newRollNumber,
+        domain: domainToAssign,
+        name: `Student ${newRollNumber}`
+      }]);
+
+    if (error) {
+      alert(`Error: ${error.message}`);
+    } else {
+      setNewRollNumber("");
+      setIsAddModalOpen(false);
+    }
+  };
+
+  const removeStudent = async (id: string) => {
     if (!confirm("Remove student?")) return;
-    const fullGlobal = JSON.parse(localStorage.getItem("global_students") || "[]");
-    const updatedGlobal = fullGlobal.filter((s: any) => s.id !== id);
-    localStorage.setItem("global_students", JSON.stringify(updatedGlobal));
-    setStudents(prev => prev.filter(s => s.id !== id));
+    const { error } = await supabase.from('students').delete().eq('id', id);
+    if (error) alert(error.message);
   };
 
   const downloadExcel = () => {
     if (results.length === 0) return;
     const headers = ["Roll Number", "Domain", "Score %", "Correct", "Incorrect", "Time Taken", "Date"];
-    const csvContent = [headers.join(","), ...results.map(r => [r.rollNumber, r.domain, r.score, r.correct, r.incorrect, formatTime(r.timeTaken), new Date(r.timestamp).toLocaleDateString()].join(","))].join("\n");
+    const csvContent = [headers.join(","), ...results.map(r => [r.roll_number, r.domain, r.score, r.correct, r.incorrect, formatTime(r.time_taken), new Date(r.timestamp).toLocaleDateString()].join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.setAttribute("href", URL.createObjectURL(blob));
@@ -118,13 +146,22 @@ export default function AdminManagementPage() {
   };
 
   const getStudentCount = (domainId: string) => {
-    const fullGlobal = JSON.parse(localStorage.getItem("global_students") || "[]");
-    return fullGlobal.filter((s: any) => s.domain === domainId).length;
+    return students.filter((s: any) => s.domain === domainId).length;
   };
 
   const filteredStudents = students.filter(s => 
-    s.rollNumber.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    s.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) && 
     (selectedDomain ? s.domain === selectedDomain : true)
+  );
+
+  const filteredQuizzes = quizzes.filter(q => 
+    q.title.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    (selectedDomain ? q.domain === selectedDomain : true)
+  );
+
+  const filteredResults = results.filter(r => 
+    r.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    (selectedDomain ? r.domain === selectedDomain : true)
   );
 
   return (
@@ -195,7 +232,6 @@ export default function AdminManagementPage() {
         <AnimatePresence mode="wait">
           {activeTab === "students" && (
             <motion.div key="students-view">
-              {/* Domain Grid for Super Admin */}
               {adminSession?.role === "super-admin" && !selectedDomain ? (
                 <div className="grid md:grid-cols-2 gap-6">
                   {availableDomains.map((domain) => (
@@ -222,12 +258,11 @@ export default function AdminManagementPage() {
                   ))}
                 </div>
               ) : (
-                /* Student List View */
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
                   {filteredStudents.length === 0 ? (
                     <div className="p-20 text-center glass rounded-[2.5rem] border-dashed border-white/10">
                       <Users className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-20" />
-                      <p className="text-muted-foreground">No students found in this domain.</p>
+                      <p className="text-muted-foreground">No students found.</p>
                     </div>
                   ) : (
                     filteredStudents.map((student) => (
@@ -237,7 +272,7 @@ export default function AdminManagementPage() {
                             <Users className="w-6 h-6" />
                           </div>
                           <div>
-                            <h3 className="font-bold text-xl tracking-tight">{student.rollNumber}</h3>
+                            <h3 className="font-bold text-xl tracking-tight">{student.roll_number}</h3>
                             <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">{student.domain.replace('-', ' ')}</p>
                           </div>
                         </div>
@@ -254,13 +289,13 @@ export default function AdminManagementPage() {
 
           {activeTab === "quizzes" && (
             <motion.div key="quizzes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
-              {quizzes.length === 0 ? (
+              {filteredQuizzes.length === 0 ? (
                 <div className="p-20 text-center glass rounded-[2.5rem] border-dashed border-white/10">
                   <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-20" />
                   <p className="text-muted-foreground">No tests scheduled.</p>
                 </div>
               ) : (
-                quizzes.map((quiz) => (
+                filteredQuizzes.map((quiz) => (
                   <div key={quiz.id} className="glass p-6 rounded-3xl border border-white/5 flex items-center justify-between hover:border-white/10 transition-colors group">
                     <div className="flex items-center gap-5">
                       <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400">
@@ -279,23 +314,23 @@ export default function AdminManagementPage() {
 
           {activeTab === "results" && (
             <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
-              {results.length === 0 ? (
+              {filteredResults.length === 0 ? (
                 <div className="p-20 text-center glass rounded-[2.5rem] border-dashed border-white/10">
                   <BarChart3 className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-20" />
                   <p className="text-muted-foreground">No results recorded.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                   {results.map((res) => (
+                   {filteredResults.map((res) => (
                     <div key={res.id} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-5 items-center hover:border-white/10 transition-colors">
-                      <span className="font-bold text-lg">{res.rollNumber}</span>
+                      <span className="font-bold text-lg">{res.roll_number}</span>
                       <span className="text-primary font-bold">{res.score}%</span>
                       <div className="flex items-center gap-4">
                         <span className="flex items-center gap-1 text-emerald-400"><CheckCircle className="w-3 h-3" /> {res.correct}</span>
                         <span className="flex items-center gap-1 text-red-400"><XCircle className="w-3 h-3" /> {res.incorrect}</span>
                       </div>
                       <span className="text-muted-foreground text-sm font-medium">{res.domain.replace('-', ' ')}</span>
-                      <span className="text-muted-foreground text-sm text-right">{formatTime(res.timeTaken)}</span>
+                      <span className="text-muted-foreground text-sm text-right">{formatTime(res.time_taken)}</span>
                     </div>
                   ))}
                 </div>

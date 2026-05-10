@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/lib/supabase";
 
 export default function SettingsPage() {
   const [admins, setAdmins] = useState<any[]>([]);
@@ -26,38 +27,67 @@ export default function SettingsPage() {
     domain: "cyber-security"
   });
 
+  // 1. Initial Fetch & Real-time Subscription
   useEffect(() => {
-    const savedAdmins = JSON.parse(localStorage.getItem("domain_admins") || "[]");
-    setAdmins(savedAdmins);
+    fetchAdmins();
+
+    const channel = supabase
+      .channel('domain_admins_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'domain_admins' }, () => {
+        fetchAdmins();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const handleAddAdmin = () => {
+  const fetchAdmins = async () => {
+    const { data, error } = await supabase
+      .from('domain_admins')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching admins:', error);
+    } else {
+      setAdmins(data || []);
+    }
+  };
+
+  const handleAddAdmin = async () => {
     if (!newAdmin.name || !newAdmin.email || !newAdmin.password) {
       alert("Please fill in all fields");
       return;
     }
 
-    const admin = {
-      id: Date.now().toString(),
-      ...newAdmin,
-      role: "domain-admin",
-      createdAt: new Date().toISOString()
-    };
+    const { error } = await supabase
+      .from('domain_admins')
+      .insert([{
+        ...newAdmin,
+        role: "domain-admin"
+      }]);
 
-    const updated = [...admins, admin];
-    setAdmins(updated);
-    localStorage.setItem("domain_admins", JSON.stringify(updated));
-    
-    setIsAddModalOpen(false);
-    setNewAdmin({ name: "", email: "", password: "", domain: "cyber-security" });
-    alert(`Admin ${admin.name} created for ${admin.domain}!`);
+    if (error) {
+      alert(`Error creating admin: ${error.message}`);
+    } else {
+      setIsAddModalOpen(false);
+      setNewAdmin({ name: "", email: "", password: "", domain: "cyber-security" });
+    }
   };
 
-  const removeAdmin = (id: string) => {
+  const removeAdmin = async (id: string) => {
     if (!confirm("Remove this domain leader?")) return;
-    const updated = admins.filter(a => a.id !== id);
-    setAdmins(updated);
-    localStorage.setItem("domain_admins", JSON.stringify(updated));
+    
+    const { error } = await supabase
+      .from('domain_admins')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert(`Error removing admin: ${error.message}`);
+    }
   };
 
   return (

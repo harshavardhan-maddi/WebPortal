@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/lib/supabase";
 
 // Load PDF.js from CDN
 const PDF_JS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js";
@@ -169,21 +170,23 @@ export default function QuizCreationPage() {
     try {
       const questions = await processFile(quizData.file);
       
-      const newQuiz = {
-        id: Date.now().toString(),
-        title: quizData.title,
-        domain: quizData.domain,
-        date: quizData.date,
-        time: quizData.time,
-        questions: questions
-      };
+      const { error } = await supabase
+        .from('quizzes')
+        .insert([{
+          title: quizData.title,
+          domain: quizData.domain,
+          date: quizData.date,
+          time: quizData.time,
+          questions: questions
+        }]);
 
-      const existingQuizzes = JSON.parse(localStorage.getItem("global_quizzes") || "[]");
-      localStorage.setItem("global_quizzes", JSON.stringify([...existingQuizzes, newQuiz]));
+      if (error) {
+        throw new Error(`Supabase Error: ${error.message}`);
+      }
       
       setStep(3);
     } catch (error: any) {
-      alert(`AI Analysis failed: ${error.message}`);
+      alert(`AI Analysis or Save failed: ${error.message}`);
     } finally {
       setIsUploading(false);
     }

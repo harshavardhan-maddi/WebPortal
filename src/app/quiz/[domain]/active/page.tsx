@@ -18,31 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatTime } from "@/lib/utils";
-
-// Mock questions for demonstration
-const mockQuestions = [
-  {
-    id: "1",
-    text: "Which of the following is NOT a common type of cyber attack?",
-    type: "MCQ",
-    options: [
-      { text: "Phishing", isCorrect: false },
-      { text: "SQL Injection", isCorrect: false },
-      { text: "Cloud Bursting", isCorrect: true },
-      { text: "Man-in-the-Middle", isCorrect: false }
-    ],
-  },
-  {
-    id: "2",
-    text: "True or False: A firewall can completely prevent all security breaches.",
-    type: "TRUE_FALSE",
-    options: [
-      { text: "True", isCorrect: false },
-      { text: "False", isCorrect: true }
-    ],
-  },
-  // Add more as needed
-];
+import { supabase } from "@/lib/supabase";
 
 export default function ActiveQuizPage() {
   const { domain } = useParams();
@@ -93,7 +69,7 @@ export default function ActiveQuizPage() {
     };
   }, []);
 
-  // Load Quiz Data
+  // Load Quiz Data from Supabase
   useEffect(() => {
     const session = localStorage.getItem("student_session");
     if (!session) {
@@ -104,17 +80,38 @@ export default function ActiveQuizPage() {
     const params = new URLSearchParams(window.location.search);
     const quizId = params.get("quizId");
 
-    const globalQuizzes = JSON.parse(localStorage.getItem("global_quizzes") || "[]");
-    const activeQuiz = globalQuizzes.find((q: any) => q.id === quizId);
-
-    if (activeQuiz && activeQuiz.questions) {
-      setQuestions(activeQuiz.questions);
+    if (!quizId) {
+      setError("No assessment ID provided.");
       setIsLoading(false);
-    } else {
-      setError("No questions found for this assessment.");
+      return;
+    }
+
+    fetchQuiz(quizId);
+  }, [router, domain]);
+
+  const fetchQuiz = async (quizId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('id', quizId)
+        .single();
+
+      if (error) throw error;
+
+      if (data && data.questions) {
+        setQuestions(data.questions);
+        setIsLoading(false);
+      } else {
+        setError("Assessment not found or has no questions.");
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      console.error("Fetch Quiz Error:", err);
+      setError(`Failed to load assessment: ${err.message}`);
       setIsLoading(false);
     }
-  }, [router, domain]);
+  };
 
   // Anti-cheat: Tab switch detection
   useEffect(() => {
@@ -174,21 +171,20 @@ export default function ActiveQuizPage() {
   const handleOptionSelect = (optionIndex: number) => {
     setAnswers(prev => ({
       ...prev,
-      [currentQuestion.id]: [optionIndex]
+      [currentQuestion.id || currentQuestionIndex]: [optionIndex]
     }));
 
-    // Auto-advance to next question after a short delay
+    // Auto-advance
     if (currentQuestionIndex < questions.length - 1) {
       setTimeout(() => {
         setCurrentQuestionIndex(prev => prev + 1);
-      }, 600); // 600ms delay for visual feedback
+      }, 600);
     }
   };
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
     
-    // STOP CAMERA IMMEDIATELY UPON COMPLETION
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
       setCameraStream(null);
@@ -200,9 +196,8 @@ export default function ActiveQuizPage() {
     let correctCount = 0;
     const totalQuestions = questions.length;
     
-    questions.forEach((q: any) => {
-      const studentAnswer = answers[q.id]?.[0];
-      // Compare student answer with the master key from PDF/Gemini
+    questions.forEach((q: any, idx: number) => {
+      const studentAnswer = answers[q.id || idx]?.[0];
       if (studentAnswer !== undefined && studentAnswer === q.correctAnswer) {
         correctCount++;
       }
@@ -211,41 +206,45 @@ export default function ActiveQuizPage() {
     const incorrectCount = totalQuestions - correctCount;
     const finalScore = Math.round((correctCount / totalQuestions) * 100);
 
-    // Save completion status for THIS SPECIFIC STUDENT
     const params = new URLSearchParams(window.location.search);
     const quizId = params.get("quizId");
     
     const session = JSON.parse(localStorage.getItem("student_session") || "{}");
     const rollNumber = session.rollNumber || "guest";
-    const historyKey = `quiz_results_history_${rollNumber}`;
-    
-    const history = JSON.parse(localStorage.getItem(historyKey) || "[]");
-    if (quizId) localStorage.setItem(historyKey, JSON.stringify([...history, quizId]));
 
-    const resultData = {
-      id: Date.now().toString(),
-      quizId,
-      domain,
-      rollNumber,
-      score: finalScore,
-      correct: correctCount,
-      incorrect: incorrectCount,
-      total: totalQuestions,
-      timeTaken: 1800 - timeLeft,
-      timestamp: new Date().toISOString()
-    };
+    try {
+      // Save to Supabase
+      const { error } = await supabase
+        .from('results')
+        .insert([{
+          quiz_id: quizId,
+          domain: domain,
+          roll_number: rollNumber,
+          score: finalScore,
+          correct: correctCount,
+          incorrect: incorrectCount,
+          total: totalQuestions,
+          time_taken: 1800 - timeLeft
+        }]);
 
-    // Save for the student to see
-    localStorage.setItem("quiz_result", JSON.stringify(resultData));
+      if (error) throw error;
 
-    // Save for the ADMIN to see
-    const globalResults = JSON.parse(localStorage.getItem("global_results") || "[]");
-    localStorage.setItem("global_results", JSON.stringify([...globalResults, resultData]));
-    
-    setTimeout(() => {
+      // Also save locally for the result page to read immediately
+      const resultData = {
+        score: finalScore,
+        correct: correctCount,
+        incorrect: incorrectCount,
+        total: totalQuestions,
+        rollNumber: rollNumber
+      };
+      localStorage.setItem("quiz_result", JSON.stringify(resultData));
+
       router.push(`/quiz/${domain}/results`);
-    }, 1500);
-  }, [answers, domain, router, timeLeft, isSubmitting]);
+    } catch (err: any) {
+      alert(`Submission failed: ${err.message}. Please contact the administrator.`);
+      setIsSubmitting(false);
+    }
+  }, [answers, domain, router, timeLeft, isSubmitting, questions]);
 
   if (isLoading) {
     return (
@@ -298,7 +297,7 @@ export default function ActiveQuizPage() {
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentQuestion.id}
+              key={currentQuestionIndex}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -314,13 +313,13 @@ export default function ActiveQuizPage() {
                     key={idx}
                     onClick={() => handleOptionSelect(idx)}
                     className={`group p-6 rounded-2xl border text-left transition-all flex items-center gap-6 ${
-                      answers[currentQuestion.id]?.[0] === idx 
+                      answers[currentQuestion.id || currentQuestionIndex]?.[0] === idx 
                         ? 'bg-primary/10 border-primary shadow-[0_0_20px_rgba(58,123,213,0.15)]' 
                         : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
                     }`}
                   >
                     <div className={`w-8 h-8 rounded-lg border flex items-center justify-center font-bold transition-colors ${
-                      answers[currentQuestion.id]?.[0] === idx 
+                      answers[currentQuestion.id || currentQuestionIndex]?.[0] === idx 
                         ? 'bg-primary border-primary text-white' 
                         : 'border-white/20 text-muted-foreground'
                     }`}>
@@ -389,7 +388,7 @@ export default function ActiveQuizPage() {
             <div 
               key={idx}
               className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                idx === currentQuestionIndex ? 'bg-primary' : answers[questions[idx].id] ? 'bg-emerald-500/50' : 'bg-white/10'
+                idx === currentQuestionIndex ? 'bg-primary' : answers[questions[idx].id || idx] ? 'bg-emerald-500/50' : 'bg-white/10'
               }`}
             />
           ))}
