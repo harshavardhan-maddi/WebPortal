@@ -1,0 +1,241 @@
+"use client";
+
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Shield, 
+  Layout, 
+  Brain, 
+  Database, 
+  Mail, 
+  Lock,
+  ChevronRight,
+  ArrowLeft,
+  AlertCircle
+} from "lucide-react";
+
+const domains = [
+  { id: "cyber-security", title: "Cyber Security", icon: Shield },
+  { id: "fsd", title: "Full Stack Development", icon: Layout },
+  { id: "aiml", title: "AI & ML", icon: Brain },
+  { id: "data-science", title: "Data Science", icon: Database },
+];
+
+export default function StudentLoginPage() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    domain: "",
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const selectDomain = (domainId: string) => {
+    setFormData({ ...formData, domain: domainId });
+    setStep(2);
+    setError("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    // Authorized roll numbers for Cyber Security
+    const cyberSecurityWhitelist = [
+      "25475A4603", "24471A4652", "24471A4617", "24471A4624", "24471A4656",
+      "24471A4608", "24471A4604", "24471A4610", "24471A4609", "24471A4611",
+      "24471A4616", "24471A4644", "24471A4627", "24471A4658", "25475A4606",
+      "25475A4605", "24471A4643", "24471A4647", "24471A4606", "24471A4654"
+    ];
+
+    // Simulate student authentication
+    setTimeout(() => {
+      const emailPart = formData.email.split('@')[0];
+      const domainPart = formData.email.split('@')[1];
+
+      // Get all students created by Admin
+      const globalStudents = JSON.parse(localStorage.getItem("global_students") || "[]");
+      
+      // Look for the student in the database
+      const student = globalStudents.find((s: any) => s.email === formData.email && s.password === formData.password);
+
+      if (student) {
+        // Enforce domain-locking
+        if (student.domain !== formData.domain) {
+          setError("You are not in this domain. Select your domain and attempt your test.");
+          setIsLoading(false);
+          return;
+        }
+
+        localStorage.setItem("student_session", JSON.stringify({
+          ...student,
+          token: Math.random().toString(36).substring(7),
+        }));
+        router.push(`/quiz/${formData.domain}/dashboard`);
+      } else {
+        // Original logic for static whitelist if student not in global list
+        const cyberSecurityWhitelist = [
+          "25475A4603", "24471A4652", "24471A4617", "24471A4624", "24471A4656",
+          "24471A4608", "24471A4604", "24471A4610", "24471A4609", "24471A4611",
+          "24471A4616", "24471A4644", "24471A4627", "24471A4658", "25475A4606",
+          "25475A4605", "24471A4643", "24471A4647", "24471A4606", "24471A4654"
+        ];
+
+        if (formData.password === emailPart && domainPart === "nrtec.in") {
+          if (formData.domain !== "cyber-security" && cyberSecurityWhitelist.includes(emailPart)) {
+            setError("You are not in this domain. Select your domain and attempt your test.");
+          } else if (formData.domain === "cyber-security" && !cyberSecurityWhitelist.includes(emailPart)) {
+            setError("Use correct credentials to attempt the test.");
+          } else {
+            localStorage.setItem("student_session", JSON.stringify({
+              email: formData.email,
+              domain: formData.domain,
+              rollNumber: emailPart,
+              name: emailPart,
+              token: Math.random().toString(36).substring(7),
+            }));
+            router.push(`/quiz/${formData.domain}/dashboard`);
+            return;
+          }
+        } else {
+          setError("Use correct credentials to attempt the test.");
+        }
+        setIsLoading(false);
+      }
+    }, 1500);
+  };
+
+  return (
+    <div className="min-h-screen pt-32 pb-20 flex items-center justify-center px-6 relative overflow-hidden">
+      {/* Background glow effects */}
+      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -z-10" />
+      <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-cyber-purple/10 rounded-full blur-[120px] -z-10" />
+
+      <div className="w-full max-w-xl">
+        <div className="glass p-8 md:p-12 rounded-[2.5rem] border border-white/10 shadow-2xl relative z-10">
+          <AnimatePresence mode="wait">
+            {step === 1 ? (
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-8"
+              >
+                <div className="text-center">
+                  <h1 className="text-4xl font-bold mb-3">Student <span className="text-primary">Login</span></h1>
+                  <p className="text-muted-foreground">Select your domain to continue</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {domains.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => selectDomain(d.id)}
+                      className="group p-6 rounded-2xl glass-card border border-white/5 text-left transition-all hover:border-primary/40 hover:bg-white/10"
+                    >
+                      <div className="p-3 rounded-xl bg-white/5 group-hover:bg-primary/20 transition-colors w-fit mb-4">
+                        <d.icon className="w-6 h-6 text-primary" />
+                      </div>
+                      <h3 className="font-bold text-lg">{d.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-1">Authorized Access</p>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <button 
+                  onClick={() => setStep(1)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white mb-10 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Change Domain
+                </button>
+
+                <div className="mb-10">
+                  <h2 className="text-3xl font-bold mb-2">Verification</h2>
+                  <p className="text-muted-foreground flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-primary" />
+                    Domain: {domains.find(d => d.id === formData.domain)?.title}
+                  </p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {error && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-3"
+                    >
+                      <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+                    </motion.div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground ml-1">Student Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        name="email" 
+                        type="email" 
+                        placeholder="yourname@college.edu" 
+                        required 
+                        className="pl-12 h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary"
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground ml-1">Access Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        name="password" 
+                        type="password" 
+                        placeholder="••••••••" 
+                        required 
+                        className="pl-12 h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary"
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  </div>
+
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading}
+                    className="w-full h-14 rounded-xl text-lg font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
+                  >
+                    {isLoading ? (
+                      <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        Authenticate <ChevronRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+}

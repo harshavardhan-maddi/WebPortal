@@ -1,0 +1,293 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  FileUp, 
+  Calendar, 
+  Clock, 
+  CheckCircle2, 
+  ArrowRight, 
+  Plus, 
+  FileText,
+  AlertCircle,
+  ChevronLeft
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+// Load PDF.js from CDN
+const PDF_JS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js";
+const PDF_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js";
+
+export default function QuizCreationPage() {
+  const [step, setStep] = useState(1);
+  const [isUploading, setIsUploading] = useState(false);
+  const [quizData, setQuizData] = useState({
+    title: "",
+    domain: "cyber-security",
+    date: "",
+    time: "",
+    file: null as File | null,
+  });
+  const [adminSession, setAdminSession] = useState<any>(null);
+
+  useEffect(() => {
+    const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
+    setAdminSession(session);
+    if (session.role === "domain-admin") {
+      setQuizData(prev => ({ ...prev, domain: session.domain }));
+    }
+  }, []);
+
+  const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY;
+
+  const loadScript = (src: string) => {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  };
+
+  const parsePDFWithGroq = async (text: string) => {
+    if (!text || text.trim().length < 10) {
+      throw new Error("No readable text found in PDF. Please ensure it is a text-based document.");
+    }
+
+    const processedText = text.substring(0, 30000);
+
+    const prompt = `
+      You are an expert Quiz Generator. 
+      Analyze the following text extracted from a PDF and extract ALL multiple-choice questions.
+      
+      CRITICAL: Return ONLY a raw JSON array of objects. No markdown formatting, no "here is your JSON", no code blocks.
+      
+      Format:
+      [
+        {
+          "text": "The full question text here",
+          "options": ["Option A", "Option B", "Option C", "Option D"],
+          "correctAnswer": 0
+        }
+      ]
+
+      Text:
+      ${processedText}
+    `;
+
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            { role: "system", content: "You are a specialized JSON generator. Output only raw JSON arrays." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.1,
+          stream: false
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(`Groq AI Error: ${data.error.message}`);
+      }
+
+      const rawOutput = data.choices[0].message.content.trim();
+      const startIndex = rawOutput.indexOf('[');
+      const endIndex = rawOutput.lastIndexOf(']') + 1;
+      
+      if (startIndex === -1 || endIndex === 0) {
+        throw new Error("Failed to extract valid JSON from AI response.");
+      }
+
+      const cleanJson = rawOutput.substring(startIndex, endIndex);
+      return JSON.parse(cleanJson);
+    } catch (error: any) {
+      console.error("AI Analysis Error:", error);
+      throw error;
+    }
+  };
+
+  const processFile = async (file: File) => {
+    try {
+      if (!(window as any).pdfjsLib) {
+        await loadScript(PDF_JS_URL);
+      }
+      
+      const pdfjsLib = (window as any).pdfjsLib;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      
+      let fullText = "";
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const strings = content.items.map((item: any) => item.str);
+        fullText += strings.join(" ") + "\n";
+      }
+
+      return parsePDFWithGroq(fullText);
+    } catch (error: any) {
+      console.error("PDF Read Error:", error);
+      throw new Error(`Failed to read PDF file: ${error.message}`);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setQuizData({ ...quizData, file: e.target.files[0] });
+    }
+  };
+
+  const nextStep = () => {
+    if (step === 1 && (!quizData.title || !quizData.date || !quizData.time)) {
+      alert("Please fill in all basic quiz details.");
+      return;
+    }
+    setStep(step + 1);
+  };
+
+  const handleGenerate = async () => {
+    if (!quizData.file) return;
+    
+    setIsUploading(true);
+    try {
+      const questions = await processFile(quizData.file);
+      
+      const newQuiz = {
+        id: Date.now().toString(),
+        title: quizData.title,
+        domain: quizData.domain,
+        date: quizData.date,
+        time: quizData.time,
+        questions: questions
+      };
+
+      const existingQuizzes = JSON.parse(localStorage.getItem("global_quizzes") || "[]");
+      localStorage.setItem("global_quizzes", JSON.stringify([...existingQuizzes, newQuiz]));
+      
+      setStep(3);
+    } catch (error: any) {
+      alert(`AI Analysis failed: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto py-10">
+      <div className="flex items-center gap-4 mb-10">
+        <button onClick={() => window.location.href = "/admin/super"} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+        <h1 className="text-4xl font-black tracking-tight">Quiz Engine</h1>
+      </div>
+
+      {/* Progress Stepper */}
+      <div className="flex items-center justify-between mb-12 px-6">
+        {[1, 2, 3].map((num) => (
+          <div key={num} className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-all ${
+              step >= num ? 'bg-primary text-white shadow-lg shadow-primary/20 scale-110' : 'bg-white/5 text-muted-foreground'
+            }`}>
+              {num < step ? <CheckCircle2 className="w-5 h-5" /> : num}
+            </div>
+            {num < 3 && <div className={`h-1 w-20 rounded-full ${step > num ? 'bg-primary' : 'bg-white/5'}`} />}
+          </div>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {step === 1 && (
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass p-10 rounded-[3rem] border border-white/5 space-y-8">
+            <div className="space-y-2">
+              <Label>Quiz Title</Label>
+              <Input placeholder="e.g. Cyber Security Fundamentals" value={quizData.title} onChange={(e) => setQuizData({...quizData, title: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl text-lg" />
+            </div>
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <Label>Assigned Domain</Label>
+                <select 
+                  className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none cursor-pointer disabled:opacity-50"
+                  disabled={adminSession?.role === "domain-admin"}
+                  value={quizData.domain}
+                  onChange={(e) => setQuizData({...quizData, domain: e.target.value})}
+                >
+                  <option value="cyber-security">Cyber Security</option>
+                  <option value="fsd">Full Stack Development</option>
+                  <option value="aiml">AI & ML</option>
+                  <option value="data-science">Data Science</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Execution Date</Label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input type="date" value={quizData.date} onChange={(e) => setQuizData({...quizData, date: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Schedule Time</Label>
+              <div className="relative">
+                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input type="time" value={quizData.time} onChange={(e) => setQuizData({...quizData, time: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
+              </div>
+            </div>
+            <Button onClick={nextStep} className="w-full h-14 rounded-2xl text-lg font-bold">Configure Questions <ArrowRight className="ml-2 w-5 h-5" /></Button>
+          </motion.div>
+        )}
+
+        {step === 2 && (
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass p-10 rounded-[3rem] border border-white/5 text-center">
+            <div className="mb-10">
+              <div className="w-20 h-20 bg-primary/20 rounded-[2rem] flex items-center justify-center text-primary mx-auto mb-6 shadow-xl"><FileUp className="w-10 h-10" /></div>
+              <h3 className="text-3xl font-black tracking-tight">Upload Question Bank</h3>
+              <p className="text-muted-foreground mt-2">Upload a text-based PDF. Our AI will automatically extract MCQs.</p>
+            </div>
+            <div className="border-2 border-dashed border-white/10 rounded-[2.5rem] p-16 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer relative group">
+              <input type="file" accept=".pdf" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+              <div className="space-y-4">
+                <FileText className="w-12 h-12 text-muted-foreground group-hover:text-primary mx-auto transition-colors" />
+                <p className="text-lg font-bold">{quizData.file ? quizData.file.name : "Drop PDF here or click to upload"}</p>
+              </div>
+            </div>
+            <div className="mt-10 flex gap-4">
+              <Button variant="ghost" onClick={() => setStep(1)} className="flex-1 h-14 rounded-2xl font-bold">Back</Button>
+              <Button onClick={handleGenerate} disabled={!quizData.file || isUploading} className="flex-[2] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20">
+                {isUploading ? <div className="flex items-center gap-3"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Analyzing PDF...</div> : "Generate & Deploy Quiz"}
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 3 && (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass p-12 rounded-[3.5rem] border border-white/5 text-center">
+            <div className="w-24 h-24 bg-emerald-500/20 rounded-[2.5rem] flex items-center justify-center text-emerald-400 mx-auto mb-8 shadow-[0_0_50px_rgba(16,185,129,0.3)]"><CheckCircle2 className="w-12 h-12" /></div>
+            <h2 className="text-4xl font-black mb-4">Quiz Deployed!</h2>
+            <p className="text-xl text-muted-foreground max-w-lg mx-auto mb-10">Your assessment is now live and scheduled. Students in the {quizData.domain.replace('-', ' ')} domain can now access it.</p>
+            <div className="flex gap-4 max-w-md mx-auto">
+              <Button onClick={() => window.location.href = "/admin/management"} className="flex-1 h-14 rounded-2xl font-bold">Go to Management</Button>
+              <Button variant="glass" onClick={() => window.location.reload()} className="flex-1 h-14 rounded-2xl font-bold">Create Another</Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

@@ -1,0 +1,143 @@
+"use client";
+
+import React from "react";
+import { motion } from "framer-motion";
+import { 
+  Plus, 
+  Upload, 
+  FileSpreadsheet, 
+  Clock, 
+  ShieldCheck,
+  ArrowRight,
+  Download,
+  Settings2,
+  Calendar
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+export default function AdminControlCenter() {
+  const [session, setSession] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const s = JSON.parse(localStorage.getItem("admin_session") || "{}");
+    setSession(s);
+  }, []);
+
+  const adminDomain = session?.domain || "all";
+  const adminRole = session?.role || "super-admin";
+
+  return (
+    <div className="space-y-10 pb-10">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h2 className="text-3xl font-bold">Admin Control Center</h2>
+          <p className="text-muted-foreground mt-1">
+            {adminRole === "super-admin" ? "Total System Overview" : `Management for ${adminDomain.replace('-', ' ')}`}
+          </p>
+        </div>
+      </div>
+
+      {/* Main Action Modules */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Module 1: Question Bank & Generation */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass p-8 rounded-[2.5rem] border border-white/5 flex flex-col h-full"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center text-primary mb-6">
+            <Upload className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold mb-3">Quiz Generation</h3>
+          <p className="text-sm text-muted-foreground flex-1 mb-8">
+            Generate new quizzes by uploading PDF question banks. Verify student solutions against extracted answer keys.
+          </p>
+          <div className="space-y-3">
+            <Button 
+              onClick={() => window.location.href = "/admin/quizzes"}
+              variant="glass"
+              className="w-full justify-between group rounded-xl h-12"
+            >
+              Access Quiz Engine <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </motion.div>
+
+        {/* Module 2: Assignment & Conduct */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="glass p-8 rounded-[2.5rem] border border-white/5 flex flex-col h-full"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 mb-6">
+            <Clock className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold mb-3">Conduct Quiz</h3>
+          <p className="text-sm text-muted-foreground flex-1 mb-8">
+            Schedule quizzes, set timers, and assign specific domains. Control when the quiz goes live and when it ends.
+          </p>
+          <div className="space-y-3">
+            <Button 
+              onClick={() => window.location.href = "/admin/management"}
+              className="w-full justify-between group rounded-xl h-12 bg-purple-600 hover:bg-purple-500"
+            >
+              Go to Management Hub <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </motion.div>
+
+        {/* Module 3: Reports & Results */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="glass p-8 rounded-[2.5rem] border border-white/5 flex flex-col h-full"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-6">
+            <FileSpreadsheet className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold mb-3">Report Center</h3>
+          <p className="text-sm text-muted-foreground flex-1 mb-8">
+            Download comprehensive student performance reports. All results are automatically synced with Google Sheets.
+          </p>
+          <div className="space-y-3">
+            <Button 
+              onClick={() => alert("Downloading student reports in Excel format...")}
+              className="w-full justify-between group rounded-xl h-12 bg-emerald-600 hover:bg-emerald-500"
+            >
+              Download Excel Report <Download className="w-4 h-4" />
+            </Button>
+            <Button variant="glass" className="w-full justify-between rounded-xl h-12">
+              Sync Google Sheets <ShieldCheck className="w-4 h-4" />
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Quick Actions List */}
+      <div className="glass p-8 rounded-[2.5rem] border border-white/5">
+        <h3 className="text-xl font-bold mb-6">Recent Admin Activity</h3>
+        <div className="space-y-4">
+          {[
+            { action: "Question Bank Uploaded", domain: "Cyber Security", time: "10 mins ago" },
+            { action: "Quiz Assigned", domain: "FSD", time: "1 hour ago" },
+            { action: "Report Generated", domain: "AI & ML", time: "Yesterday" },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-transparent hover:border-white/10 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="w-2 h-2 rounded-full bg-primary" />
+                <div>
+                  <p className="font-medium">{item.action}</p>
+                  <p className="text-xs text-muted-foreground">{item.domain}</p>
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">{item.time}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
