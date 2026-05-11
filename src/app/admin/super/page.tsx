@@ -165,11 +165,12 @@ export default function AdminControlCenter() {
             <Button 
               onClick={downloadReport}
               disabled={isExporting}
-              className="w-full justify-between group rounded-xl h-12 bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20"
+              className="w-full justify-between group rounded-xl h-12 bg-orange-600 hover:bg-orange-500 shadow-lg shadow-orange-600/20"
             >
               {isExporting ? "Processing..." : "Download Excel Report"} 
               {isExporting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-4 h-4" />}
             </Button>
+
 
 
             <Button variant="glass" className="w-full justify-between rounded-xl h-12">
