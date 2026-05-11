@@ -13,26 +13,7 @@ import {
   History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-// Mock quizzes for demonstration
-const mockQuizzes = [
-  {
-    id: "today-test",
-    title: "Domain Assessment - Day 2",
-    date: new Date().toLocaleDateString(),
-    duration: "30 Mins",
-    questions: 30,
-    isToday: true,
-  },
-  {
-    id: "yesterday-test",
-    title: "Domain Assessment - Day 1",
-    date: new Date(Date.now() - 86400000).toLocaleDateString(),
-    duration: "30 Mins",
-    questions: 30,
-    isToday: false,
-  }
-];
+import { supabase } from "@/lib/supabase";
 
 export default function StudentDashboard() {
   const { domain } = useParams();
@@ -40,6 +21,7 @@ export default function StudentDashboard() {
   const [student, setStudent] = useState<any>(null);
   const [completedQuizzes, setCompletedQuizzes] = useState<string[]>([]);
   const [allQuizzes, setAllQuizzes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const session = localStorage.getItem("student_session");
@@ -47,52 +29,63 @@ export default function StudentDashboard() {
       router.push("/quiz/auth");
       return;
     }
-    setStudent(JSON.parse(session));
-
-    // Load completed status FOR THIS SPECIFIC STUDENT
     const studentData = JSON.parse(session);
     setStudent(studentData);
-    
-    const results = localStorage.getItem(`quiz_results_history_${studentData.rollNumber}`);
-    if (results) {
-      setCompletedQuizzes(JSON.parse(results));
-    }
 
-    // Load ALL quizzes from global storage and filter by current domain
-    const globalQuizzes = JSON.parse(localStorage.getItem("global_quizzes") || "[]");
-    
-    // Add default mock quizzes if empty for demo
-    const finalQuizzes = globalQuizzes.length > 0 ? globalQuizzes : [
-      {
-        id: "today-test",
-        title: "Default Assessment",
-        domain: domain,
-        date: new Date().toISOString().split('T')[0],
-        duration: "30 Mins",
-        questions: 30,
-        isToday: true,
-      }
-    ];
-
-    // Filter to only show quizzes for THIS domain
-    const filtered = finalQuizzes.filter((q: any) => q.domain === domain);
-    
-    // Dynamically set isToday based on the current date
-    const today = new Date().toISOString().split('T')[0];
-    const withTodayFlag = filtered.map((q: any) => ({
-      ...q,
-      isToday: q.date === today
-    }));
-
-    setAllQuizzes(withTodayFlag);
+    fetchData(studentData);
   }, [router, domain]);
+
+  const fetchData = async (studentData: any) => {
+    setIsLoading(true);
+    try {
+      // 1. Fetch ALL quizzes for THIS domain from Supabase
+      const { data: quizzes, error: qError } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('domain', domain)
+        .order('date', { ascending: false });
+
+      if (qError) throw qError;
+
+      // 2. Fetch results for THIS student to mark completed tests
+      const { data: results, error: rError } = await supabase
+        .from('results')
+        .select('quiz_id')
+        .eq('roll_number', studentData.rollNumber);
+
+      if (rError) throw rError;
+
+      const completedIds = results?.map(r => r.quiz_id) || [];
+      setCompletedQuizzes(completedIds);
+
+      // 3. Process Quizzes with Today flag
+      const today = new Date().toISOString().split('T')[0];
+      const processedQuizzes = (quizzes || []).map((q: any) => ({
+        ...q,
+        isToday: q.date === today,
+        duration: "30 Mins" // Default duration if not in DB
+      }));
+
+      setAllQuizzes(processedQuizzes);
+    } catch (err) {
+      console.error("Error fetching student dashboard data:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleStartQuiz = (quizId: string) => {
     if (completedQuizzes.includes(quizId)) return;
     router.push(`/quiz/${domain}/instructions?quizId=${quizId}`);
   };
 
-  if (!student) return null;
+  if (!student || isLoading) {
+    return (
+      <div className="min-h-screen bg-[#05060f] flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-32 pb-20 px-6">
@@ -139,21 +132,23 @@ export default function StudentDashboard() {
           </section>
 
           {/* Previous Tests */}
-          <section className="space-y-4">
-            <h2 className="text-xl font-bold flex items-center gap-2 text-muted-foreground">
-              <History className="w-5 h-5" /> Previous Assessments
-            </h2>
-            <div className="grid gap-4">
-              {allQuizzes.filter(q => !q.isToday).map((quiz) => (
-                <QuizCard 
-                  key={quiz.id} 
-                  quiz={quiz} 
-                  isCompleted={completedQuizzes.includes(quiz.id)}
-                  onStart={() => handleStartQuiz(quiz.id)}
-                />
-              ))}
-            </div>
-          </section>
+          {allQuizzes.filter(q => !q.isToday).length > 0 && (
+            <section className="space-y-4">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-muted-foreground">
+                <History className="w-5 h-5" /> Previous Assessments
+              </h2>
+              <div className="grid gap-4">
+                {allQuizzes.filter(q => !q.isToday).map((quiz) => (
+                  <QuizCard 
+                    key={quiz.id} 
+                    quiz={quiz} 
+                    isCompleted={completedQuizzes.includes(quiz.id)}
+                    onStart={() => handleStartQuiz(quiz.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>
@@ -181,7 +176,7 @@ function QuizCard({ quiz, isCompleted, onStart }: { quiz: any, isCompleted: bool
               <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {quiz.date}</span>
               <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {quiz.duration}</span>
               <span className="flex items-center gap-1">
-                {Array.isArray(quiz.questions) ? quiz.questions.length : quiz.questions} Questions
+                {Array.isArray(quiz.questions) ? quiz.questions.length : "Multi"} Questions
               </span>
             </div>
           </div>
