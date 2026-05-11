@@ -1,5 +1,8 @@
 "use client";
 
+import * as XLSX from 'xlsx';
+
+
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -134,15 +137,49 @@ export default function AdminManagementPage() {
 
 
   const downloadExcel = (data: any[] = results) => {
-    if (data.length === 0) return;
-    const headers = ["Roll Number", "Test Name", "Domain", "Score %", "Correct", "Incorrect", "Time Taken", "Date"];
-    const csvContent = [headers.join(","), ...data.map(r => [r.roll_number, r.quizzes?.title, r.domain, r.score, r.correct, r.incorrect, formatTime(r.time_taken), new Date(r.timestamp).toLocaleDateString()].join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `Report.csv`;
-    link.click();
+    if (data.length === 0) {
+      alert("No data available to download.");
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    // Group data by domain
+    const domains = Array.from(new Set(data.map(r => r.domain || 'general')));
+
+    domains.forEach(domain => {
+      const domainData = data.filter(r => (r.domain || 'general') === domain);
+      
+      const sheetData = domainData.map(r => ({
+        "Roll Number": r.roll_number,
+        "Test Name": r.quizzes?.title || "System Test",
+        "Domain": domain.replace('-', ' ').toUpperCase(),
+        "Score %": `${r.score}%`,
+        "Correct": r.correct,
+        "Incorrect": r.incorrect,
+        "Total Questions": r.total,
+        "Time Taken": formatTime(r.time_taken),
+        "Date": new Date(r.timestamp).toLocaleDateString()
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(sheetData);
+      
+      // Auto-size columns
+      const maxWidths = Object.keys(sheetData[0] || {}).map(key => {
+        return Math.max(
+          key.length,
+          ...sheetData.map(row => String(row[key as keyof typeof row] || '').length)
+        );
+      });
+      worksheet['!cols'] = maxWidths.map(w => ({ w: w + 2 }));
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, domain.replace('-', ' ').toUpperCase().slice(0, 31));
+    });
+
+    const quizTitle = data[0]?.quizzes?.title || "Consolidated";
+    XLSX.writeFile(workbook, `${quizTitle}_Report.xlsx`);
   };
+
 
   const getStudentScoreForQuiz = (rollNumber: string, quizId: string) => {
     const result = results.find(r => r.roll_number === rollNumber && r.quiz_id === quizId);
