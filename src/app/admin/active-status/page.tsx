@@ -24,6 +24,8 @@ export default function ActiveStatusPage() {
   const [presenceData, setPresenceData] = useState<Record<string, any>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<string>("3rd Year Super 50");
+
 
   useEffect(() => {
     const channel = supabase.channel('online-students');
@@ -62,8 +64,10 @@ export default function ActiveStatusPage() {
   const filteredStudents = students.filter((s: any) => 
     (s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
      s.roll_number?.toLowerCase().includes(searchQuery.toLowerCase())) &&
-    (selectedDomain ? s.domain === selectedDomain : true)
+    (s.batch === selectedBatch) &&
+    (selectedDomain && selectedBatch === "3rd Year Super 50" ? s.domain === selectedDomain : true)
   );
+
 
   const stats = {
     total: filteredStudents.length,
@@ -101,31 +105,51 @@ export default function ActiveStatusPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input 
-            type="text" 
-            placeholder="Search by name or roll number..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-12 pl-12 pr-4 bg-white/5 rounded-2xl border border-white/10 focus:ring-1 ring-primary outline-none" 
-          />
-        </div>
-        
-        <div className="flex gap-2">
-          {['cyber-security', 'fsd', 'aiml', 'data-science'].map((dom) => (
+        <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
+          {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
             <button
-              key={dom}
-              onClick={() => setSelectedDomain(selectedDomain === dom ? null : dom)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                selectedDomain === dom ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/10 text-muted-foreground hover:border-white/20'
+              key={batch}
+              onClick={() => {
+                setSelectedBatch(batch);
+                setSelectedDomain(null);
+              }}
+              className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${
+                selectedBatch === batch ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
               }`}
             >
-              {dom.replace('-', ' ').toUpperCase()}
+              {batch}
             </button>
           ))}
         </div>
+
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input 
+            type="text" 
+            placeholder="Search student..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-12 pl-12 pr-4 bg-white/5 rounded-2xl border border-white/10 focus:ring-1 ring-primary outline-none text-sm" 
+          />
+        </div>
+        
+        {selectedBatch === "3rd Year Super 50" && (
+          <div className="flex gap-2">
+            {['cyber-security', 'fsd', 'aiml', 'data-science'].map((dom) => (
+              <button
+                key={dom}
+                onClick={() => setSelectedDomain(selectedDomain === dom ? null : dom)}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black border transition-all ${
+                  selectedDomain === dom ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/10 text-muted-foreground hover:border-white/20'
+                }`}
+              >
+                {dom.replace('-', ' ').toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -169,8 +193,11 @@ export default function ActiveStatusPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Domain</span>
-                    <span className="font-bold text-primary uppercase tracking-tighter">{student.domain?.replace('-', ' ')}</span>
+                    <span className="font-bold text-primary uppercase tracking-tighter">
+                      {student.batch === "4th Year Super 50" ? "General" : student.domain?.replace('-', ' ')}
+                    </span>
                   </div>
+
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Session Start</span>
                     <span className="font-bold text-white">

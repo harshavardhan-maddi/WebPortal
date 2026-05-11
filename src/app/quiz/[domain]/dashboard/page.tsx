@@ -57,8 +57,10 @@ export default function StudentDashboard() {
             roll_number: studentData.rollNumber,
             name: studentData.name,
             domain: domain,
+            batch: studentData.batch,
             status: 'online',
             last_seen: new Date().toISOString()
+
           });
         }
       });

@@ -26,19 +26,38 @@ const domains = [
   { id: "data-science", title: "Data Science", icon: Database },
 ];
 
+const batches = [
+  { id: "3rd Year Super 50", title: "3rd Year Super 50", description: "Cyber Security, FSD, AI/ML, Data Science" },
+  { id: "4th Year Super 50", title: "4th Year Super 50", description: "Final Year Advanced Training" },
+];
+
+
 export default function StudentLoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0); // Start at 0 for Batch selection
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     domain: "",
+    batch: "3rd Year Super 50",
   });
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const selectBatch = (batchId: string) => {
+    setFormData({ ...formData, batch: batchId });
+    if (batchId === "4th Year Super 50") {
+      setFormData(prev => ({ ...prev, domain: "general", batch: batchId }));
+      setStep(2); // Skip domain selection for 4th years
+    } else {
+      setStep(1); // Proceed to domain selection for 3rd years
+    }
+    setError("");
   };
 
   const selectDomain = (domainId: string) => {
@@ -46,6 +65,7 @@ export default function StudentLoginPage() {
     setStep(2);
     setError("");
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +96,13 @@ export default function StudentLoginPage() {
           return;
         }
 
+        // Enforce batch-locking
+        if (student.batch !== formData.batch) {
+          setError(`You are registered in ${student.batch}. Please select the correct batch.`);
+          setIsLoading(false);
+          return;
+        }
+
         // Enforce domain-locking
         if (student.domain !== formData.domain) {
           setError("You are not in this domain. Select your domain and attempt your test.");
@@ -83,15 +110,18 @@ export default function StudentLoginPage() {
           return;
         }
 
+
         localStorage.setItem("student_session", JSON.stringify({
           id: student.id,
           email: `${student.roll_number}@nrtec.in`,
           domain: student.domain,
+          batch: student.batch,
           rollNumber: student.roll_number,
           name: student.name,
           token: Math.random().toString(36).substring(7),
         }));
         router.push(`/quiz/${formData.domain}/dashboard`);
+
       } else {
         // 2. Fallback to hardcoded whitelist for Cyber Security (Original requirement)
         const cyberSecurityWhitelist = [
@@ -137,17 +167,57 @@ export default function StudentLoginPage() {
       <div className="w-full max-w-xl">
         <div className="glass p-8 md:p-12 rounded-[2.5rem] border border-white/10 shadow-2xl relative z-10">
           <AnimatePresence mode="wait">
-            {step === 1 ? (
+            {step === 0 ? (
               <motion.div
-                key="step1"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
+                key="step0"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
                 className="space-y-8"
               >
                 <div className="text-center">
-                  <h1 className="text-4xl font-bold mb-3">Student <span className="text-primary">Login</span></h1>
-                  <p className="text-muted-foreground">Select your domain to continue</p>
+                  <h1 className="text-4xl font-bold mb-3 text-white">Select <span className="text-primary">Batch</span></h1>
+                  <p className="text-muted-foreground">Identify your academic program</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {batches.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => selectBatch(b.id)}
+                      className="group p-8 rounded-3xl glass-card border border-white/5 text-left transition-all hover:border-primary/40 hover:bg-white/10"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-bold text-2xl mb-1 group-hover:text-primary transition-colors">{b.title}</h3>
+                          <p className="text-sm text-muted-foreground">{b.description}</p>
+                        </div>
+                        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary transition-all">
+                          <ChevronRight className="w-6 h-6" />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            ) : step === 1 ? (
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8"
+              >
+                <button 
+                  onClick={() => setStep(0)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white mb-6 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Change Batch
+                </button>
+
+                <div className="text-center">
+                  <h1 className="text-4xl font-bold mb-3">Select <span className="text-primary">Domain</span></h1>
+                  <p className="text-muted-foreground">Select your specialization</p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -161,7 +231,6 @@ export default function StudentLoginPage() {
                         <d.icon className="w-6 h-6 text-primary" />
                       </div>
                       <h3 className="font-bold text-lg">{d.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-1">Authorized Access</p>
                     </button>
                   ))}
                 </div>
@@ -174,19 +243,28 @@ export default function StudentLoginPage() {
                 exit={{ opacity: 0, x: -20 }}
               >
                 <button 
-                  onClick={() => setStep(1)}
+                  onClick={() => formData.batch === "4th Year Super 50" ? setStep(0) : setStep(1)}
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white mb-10 transition-colors"
                 >
-                  <ArrowLeft className="w-4 h-4" /> Change Domain
+                  <ArrowLeft className="w-4 h-4" /> Go Back
                 </button>
 
                 <div className="mb-10">
                   <h2 className="text-3xl font-bold mb-2">Verification</h2>
-                  <p className="text-muted-foreground flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-primary" />
-                    Domain: {domains.find(d => d.id === formData.domain)?.title}
-                  </p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-muted-foreground flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-primary" />
+                      Batch: {formData.batch}
+                    </p>
+                    {formData.batch !== "4th Year Super 50" && (
+                      <p className="text-muted-foreground flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-primary" />
+                        Domain: {domains.find(d => d.id === formData.domain)?.title}
+                      </p>
+                    )}
+                  </div>
                 </div>
+
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {error && (

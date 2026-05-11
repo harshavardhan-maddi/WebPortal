@@ -105,8 +105,10 @@ export default function ActiveQuizPage() {
             roll_number: session.rollNumber,
             name: session.name,
             domain: domain,
+            batch: session.batch,
             status: 'writing',
             last_seen: new Date().toISOString()
+
           });
         }
       });

@@ -29,9 +29,11 @@ export default function QuizCreationPage() {
   const [quizData, setQuizData] = useState({
     title: "",
     domain: "cyber-security",
-    domains: [] as string[], // New state for multiple domains
-    isAllDomains: false,     // New state for "All Domains"
+    domains: [] as string[], 
+    isAllDomains: false,     
+    batch: "3rd Year Super 50", // New state for batch
     date: "",
+
     time: "",
     endTime: "",
     file: null as File | null,
@@ -186,7 +188,9 @@ export default function QuizCreationPage() {
       const inserts = targetDomains.map(dom => ({
         title: quizData.title,
         domain: dom,
+        batch: quizData.batch, // Include batch in insertion
         date: quizData.date,
+
         time: quizData.time,
         end_time: quizData.endTime,
         questions: questions
@@ -235,58 +239,86 @@ export default function QuizCreationPage() {
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass p-10 rounded-[3rem] border border-white/5 space-y-8">
-            <div className="space-y-2">
-              <Label>Quiz Title</Label>
-              <Input placeholder="e.g. Cyber Security Fundamentals" value={quizData.title} onChange={(e) => setQuizData({...quizData, title: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl text-lg" />
-            </div>
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
-                <Label>Assigned Domains</Label>
-                {adminSession?.role === "domain-admin" ? (
-                  <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-primary capitalize">
-                    {quizData.domain.replace('-', ' ')}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-primary/40 transition-all cursor-pointer" onClick={() => setQuizData({...quizData, isAllDomains: !quizData.isAllDomains})}>
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${quizData.isAllDomains ? 'bg-primary border-primary' : 'border-white/20'}`}>
-                        {quizData.isAllDomains && <CheckCircle2 className="w-3 h-3 text-white" />}
-                      </div>
-                      <span className="font-bold text-sm">All Domains</span>
-                    </div>
-                    
-                    {!quizData.isAllDomains && (
-                      <div className="grid grid-cols-2 gap-3">
-                        {[
-                          { id: "cyber-security", name: "Cyber Security" },
-                          { id: "fsd", name: "Full Stack Development" },
-                          { id: "aiml", name: "AI & ML" },
-                          { id: "data-science", name: "Data Science" },
-                        ].map((dom) => (
-                          <div 
-                            key={dom.id}
-                            onClick={() => {
-                              const newDomains = quizData.domains.includes(dom.id)
-                                ? quizData.domains.filter(d => d !== dom.id)
-                                : [...quizData.domains, dom.id];
-                              setQuizData({...quizData, domains: newDomains});
-                            }}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                              quizData.domains.includes(dom.id) ? 'bg-primary/10 border-primary text-primary' : 'bg-white/5 border-white/10 text-muted-foreground'
-                            }`}
-                          >
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${quizData.domains.includes(dom.id) ? 'bg-primary border-primary' : 'border-white/20'}`}>
-                              {quizData.domains.includes(dom.id) && <CheckCircle2 className="w-2.5 h-2.5 text-white" />}
-                            </div>
-                            <span className="text-xs font-bold">{dom.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <Label>Target Batch</Label>
+                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
+                  {["3rd Year Super 50", "4th Year Super 50"].map((b) => (
+                    <button
+                      key={b}
+                      onClick={() => setQuizData({...quizData, batch: b})}
+                      className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${
+                        quizData.batch === b ? 'bg-primary text-white' : 'text-muted-foreground hover:text-white'
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <div className="space-y-2">
+                <Label>Quiz Title</Label>
+                <Input placeholder="e.g. Final Assessment" value={quizData.title} onChange={(e) => setQuizData({...quizData, title: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl text-lg" />
+              </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-8">
+              {quizData.batch === "3rd Year Super 50" ? (
+                <div className="space-y-2">
+                  <Label>Assigned Domains</Label>
+                  {adminSession?.role === "domain-admin" ? (
+                    <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-primary capitalize">
+                      {quizData.domain.replace('-', ' ')}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-primary/40 transition-all cursor-pointer" onClick={() => setQuizData({...quizData, isAllDomains: !quizData.isAllDomains})}>
+                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${quizData.isAllDomains ? 'bg-primary border-primary' : 'border-white/20'}`}>
+                          {quizData.isAllDomains && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className="font-bold text-sm">All Domains</span>
+                      </div>
+                      
+                      {!quizData.isAllDomains && (
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { id: "cyber-security", name: "Cyber Security" },
+                            { id: "fsd", name: "Full Stack Development" },
+                            { id: "aiml", name: "AI & ML" },
+                            { id: "data-science", name: "Data Science" },
+                          ].map((dom) => (
+                            <div 
+                              key={dom.id}
+                              onClick={() => {
+                                const newDomains = quizData.domains.includes(dom.id)
+                                  ? quizData.domains.filter(d => d !== dom.id)
+                                  : [...quizData.domains, dom.id];
+                                setQuizData({...quizData, domains: newDomains});
+                              }}
+                              className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                quizData.domains.includes(dom.id) ? 'bg-primary/10 border-primary text-primary' : 'bg-white/5 border-white/10 text-muted-foreground'
+                              }`}
+                            >
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center ${quizData.domains.includes(dom.id) ? 'bg-primary border-primary' : 'border-white/20'}`}>
+                                {quizData.domains.includes(dom.id) && <CheckCircle2 className="w-2.5 h-2.5 text-white" />}
+                              </div>
+                              <span className="text-xs font-bold">{dom.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Assigned Domains</Label>
+                  <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-muted-foreground italic">
+                    General Access (No Domains)
+                  </div>
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <Label>Execution Date</Label>
                 <div className="relative">
@@ -295,6 +327,7 @@ export default function QuizCreationPage() {
                 </div>
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
                 <Label>Starting Time</Label>

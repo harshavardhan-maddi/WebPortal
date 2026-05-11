@@ -48,6 +48,8 @@ export default function AdminManagementPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [adminSession, setAdminSession] = useState<any>(null);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<string>("3rd Year Super 50");
+
 
   const availableDomains = [
     { id: "cyber-security", name: "Cyber Security", color: "from-cyan-500/20 to-blue-500/20", icon: ShieldAlert },
@@ -62,13 +64,16 @@ export default function AdminManagementPage() {
     
     if (session.role === "domain-admin") {
       setSelectedDomain(session.domain);
+      setSelectedBatch(session.batch || "3rd Year Super 50");
     }
 
-    fetchAllData(session);
+    fetchAllData(session, selectedBatch);
 
-    const resultsChannel = supabase.channel('results_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => fetchAllData(session)).subscribe();
-    const quizzesChannel = supabase.channel('quizzes_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => fetchAllData(session)).subscribe();
-    const studentsChannel = supabase.channel('students_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchAllData(session)).subscribe();
+
+    const resultsChannel = supabase.channel('results_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => fetchAllData(session, selectedBatch)).subscribe();
+    const quizzesChannel = supabase.channel('quizzes_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => fetchAllData(session, selectedBatch)).subscribe();
+    const studentsChannel = supabase.channel('students_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchAllData(session, selectedBatch)).subscribe();
+
 
     return () => {
       supabase.removeChannel(resultsChannel);
@@ -77,47 +82,56 @@ export default function AdminManagementPage() {
     };
   }, []);
 
-  const fetchAllData = async (session: any) => {
+  const fetchAllData = async (session: any, batch: string) => {
     const domainFilter = session.role === "domain-admin" ? session.domain : null;
 
-    let studentsQuery = supabase.from('students').select('*').order('created_at', { ascending: false });
-    if (domainFilter) studentsQuery = studentsQuery.eq('domain', domainFilter);
+
+    let studentsQuery = supabase.from('students').select('*').eq('batch', batch).order('created_at', { ascending: false });
+    if (domainFilter && batch === "3rd Year Super 50") studentsQuery = studentsQuery.eq('domain', domainFilter);
     const { data: sData } = await studentsQuery;
     setStudents(sData || []);
 
-    let quizzesQuery = supabase.from('quizzes').select('*').order('created_at', { ascending: false });
-    if (domainFilter) {
+    let quizzesQuery = supabase.from('quizzes').select('*').eq('batch', batch).order('created_at', { ascending: false });
+    if (domainFilter && batch === "3rd Year Super 50") {
       quizzesQuery = quizzesQuery.or(`domain.eq.${domainFilter},domain.eq.all`);
     }
     const { data: qData } = await quizzesQuery;
-
     setQuizzes(qData || []);
 
-    let resultsQuery = supabase.from('results').select('*, quizzes(title, date)').order('timestamp', { ascending: false });
-    if (domainFilter) resultsQuery = resultsQuery.eq('domain', domainFilter);
+    let resultsQuery = supabase.from('results').select('*, quizzes(title, date)').eq('batch', batch).order('timestamp', { ascending: false });
+    if (domainFilter && batch === "3rd Year Super 50") resultsQuery = resultsQuery.eq('domain', domainFilter);
     const { data: rData } = await resultsQuery;
     setResults(rData || []);
+
   };
 
   const handleAddStudent = async () => {
     if (!newRollNumber) return;
-    const domainToAssign = adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain;
-    const { error } = await supabase.from('students').insert([{ roll_number: newRollNumber, domain: domainToAssign, name: `Student ${newRollNumber}` }]);
-    if (error) alert(error.message); else { setNewRollNumber(""); setIsAddModalOpen(false); fetchAllData(adminSession); }
+    const domainToAssign = selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain);
+    const { error } = await supabase.from('students').insert([{ 
+      roll_number: newRollNumber, 
+      domain: domainToAssign, 
+      batch: selectedBatch,
+      name: `Student ${newRollNumber}` 
+    }]);
+    if (error) alert(error.message); else { setNewRollNumber(""); setIsAddModalOpen(false); fetchAllData(adminSession, selectedBatch); }
   };
+
 
   const removeStudent = async (id: string) => {
     if (!confirm("Remove student?")) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
-    if (!error) fetchAllData(adminSession);
+    if (!error) fetchAllData(adminSession, selectedBatch);
   };
+
 
   const deleteQuiz = async (id: string) => {
     if (!confirm("Delete quiz?")) return;
     await supabase.from('results').delete().eq('quiz_id', id);
     await supabase.from('quizzes').delete().eq('id', id);
-    fetchAllData(adminSession);
+    fetchAllData(adminSession, selectedBatch);
   };
+
 
   const downloadExcel = (data: any[] = results) => {
     if (data.length === 0) return;
@@ -148,8 +162,9 @@ export default function AdminManagementPage() {
   const filteredResults = results.filter(r => 
     (r.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) || 
      r.quizzes?.title?.toLowerCase().includes(searchQuery.toLowerCase())) && 
-    (selectedDomain ? r.domain === selectedDomain : true)
+    (selectedDomain && selectedBatch === "3rd Year Super 50" ? r.domain === selectedDomain : true)
   );
+
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-8">
@@ -168,6 +183,24 @@ export default function AdminManagementPage() {
               </p>
             </div>
           </div>
+
+          <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 shadow-xl">
+            {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
+              <button
+                key={batch}
+                onClick={() => {
+                  setSelectedBatch(batch);
+                  fetchAllData(adminSession, batch);
+                }}
+                className={`px-8 py-2.5 rounded-xl text-xs font-black transition-all ${
+                  selectedBatch === batch ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+                }`}
+              >
+                {batch}
+              </button>
+            ))}
+          </div>
+
           
           <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
             {["students", "quizzes", "results"].map((tab) => (
@@ -246,8 +279,9 @@ export default function AdminManagementPage() {
                 </div>
               )}
 
-              {adminSession?.role === "super-admin" && selectedDomain === null ? (
+              {adminSession?.role === "super-admin" && selectedDomain === null && selectedBatch === "3rd Year Super 50" ? (
                 availableDomains.map(domain => {
+
                   const domainStudents = students.filter(s => s.domain === domain.id && s.roll_number.toLowerCase().includes(searchQuery.toLowerCase()));
                   if (domainStudents.length === 0 && searchQuery) return null;
                   return (
