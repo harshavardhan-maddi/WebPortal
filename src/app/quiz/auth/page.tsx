@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   AlertCircle
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const domains = [
   { id: "cyber-security", title: "Cyber Security", icon: Shield },
@@ -51,26 +52,30 @@ export default function StudentLoginPage() {
     setIsLoading(true);
     setError("");
 
-    // Authorized roll numbers for Cyber Security
-    const cyberSecurityWhitelist = [
-      "25475A4603", "24471A4652", "24471A4617", "24471A4624", "24471A4656",
-      "24471A4608", "24471A4604", "24471A4610", "24471A4609", "24471A4611",
-      "24471A4616", "24471A4644", "24471A4627", "24471A4658", "25475A4606",
-      "25475A4605", "24471A4643", "24471A4647", "24471A4606", "24471A4654"
-    ];
-
-    // Simulate student authentication
-    setTimeout(() => {
+    try {
       const emailPart = formData.email.split('@')[0];
       const domainPart = formData.email.split('@')[1];
 
-      // Get all students created by Admin
-      const globalStudents = JSON.parse(localStorage.getItem("global_students") || "[]");
-      
-      // Look for the student in the database
-      const student = globalStudents.find((s: any) => s.email === formData.email && s.password === formData.password);
+      // 1. Check Supabase for the student
+      const { data: student, error: sbError } = await supabase
+        .from('students')
+        .select('*')
+        .eq('roll_number', emailPart)
+        .single();
+
+      if (sbError && sbError.code !== 'PGRST116') { // PGRST116 is "not found"
+         throw sbError;
+      }
 
       if (student) {
+        // Simple password check (using roll number as password as per previous logic)
+        // In a real app, use Supabase Auth or proper hashing.
+        if (formData.password !== student.roll_number) {
+          setError("Use correct credentials to attempt the test.");
+          setIsLoading(false);
+          return;
+        }
+
         // Enforce domain-locking
         if (student.domain !== formData.domain) {
           setError("You are not in this domain. Select your domain and attempt your test.");
@@ -79,12 +84,16 @@ export default function StudentLoginPage() {
         }
 
         localStorage.setItem("student_session", JSON.stringify({
-          ...student,
+          id: student.id,
+          email: `${student.roll_number}@nrtec.in`,
+          domain: student.domain,
+          rollNumber: student.roll_number,
+          name: student.name,
           token: Math.random().toString(36).substring(7),
         }));
         router.push(`/quiz/${formData.domain}/dashboard`);
       } else {
-        // Original logic for static whitelist if student not in global list
+        // 2. Fallback to hardcoded whitelist for Cyber Security (Original requirement)
         const cyberSecurityWhitelist = [
           "25475A4603", "24471A4652", "24471A4617", "24471A4624", "24471A4656",
           "24471A4608", "24471A4604", "24471A4610", "24471A4609", "24471A4611",
@@ -106,14 +115,17 @@ export default function StudentLoginPage() {
               token: Math.random().toString(36).substring(7),
             }));
             router.push(`/quiz/${formData.domain}/dashboard`);
-            return;
           }
         } else {
           setError("Use correct credentials to attempt the test.");
         }
-        setIsLoading(false);
       }
-    }, 1500);
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      setError("Server connection failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

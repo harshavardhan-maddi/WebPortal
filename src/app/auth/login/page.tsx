@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Mail, Rocket, AlertCircle, ChevronRight } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -18,11 +19,10 @@ export default function AdminLoginPage() {
     setIsLoading(true);
     setError("");
 
-    // Real Authentication logic
-    setTimeout(() => {
-      const email = (e.target as any).email.value;
-      const password = (e.target as any).password.value;
-      
+    const email = (e.target as any).email.value;
+    const password = (e.target as any).password.value;
+    
+    try {
       // 1. SUPER ADMIN CHECK (Hardcoded master)
       if (email === "amcd@nrtec.in" && password === "nrtec@technoelite") {
         localStorage.setItem("admin_session", JSON.stringify({
@@ -34,10 +34,18 @@ export default function AdminLoginPage() {
         return;
       }
 
-      // 2. DOMAIN ADMIN CHECK (Dynamic from Settings)
-      const admins = JSON.parse(localStorage.getItem("domain_admins") || "[]");
-      const foundAdmin = admins.find((a: any) => a.email === email && a.password === password);
+      // 2. DOMAIN ADMIN CHECK (Supabase)
+      const { data: foundAdmin, error: sbError } = await supabase
+        .from('domain_admins')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single();
       
+      if (sbError) {
+        throw new Error("Invalid credentials. Access Denied.");
+      }
+
       if (foundAdmin) {
         localStorage.setItem("admin_session", JSON.stringify({
           role: "domain-admin",
@@ -47,9 +55,12 @@ export default function AdminLoginPage() {
         router.push("/admin/super");
       } else {
         setError("Invalid credentials. Access Denied.");
-        setIsLoading(false);
       }
-    }, 1500);
+    } catch (err: any) {
+      setError(err.message || "An error occurred during login.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
