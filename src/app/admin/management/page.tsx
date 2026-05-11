@@ -63,15 +63,18 @@ export default function AdminManagementPage() {
 
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
+    if (!session.token) window.location.href = "/admin/auth";
     setAdminSession(session);
+    
+    // Strict isolation for leaders
+    const initialBatch = session.role === "super-admin" ? "3rd Year Super 50" : (session.batch || "3rd Year Super 50");
+    setSelectedBatch(initialBatch);
     
     if (session.role === "domain-admin") {
       setSelectedDomain(session.domain);
-      setSelectedBatch(session.batch || "3rd Year Super 50");
     }
 
-    fetchAllData(session, selectedBatch);
-
+    fetchAllData(session, initialBatch);
 
     const resultsChannel = supabase.channel('results_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => fetchAllData(session, selectedBatch)).subscribe();
     const quizzesChannel = supabase.channel('quizzes_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => fetchAllData(session, selectedBatch)).subscribe();
@@ -221,22 +224,25 @@ export default function AdminManagementPage() {
             </div>
           </div>
 
-          <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 shadow-xl">
-            {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
-              <button
-                key={batch}
-                onClick={() => {
-                  setSelectedBatch(batch);
-                  fetchAllData(adminSession, batch);
-                }}
-                className={`px-8 py-2.5 rounded-xl text-xs font-black transition-all ${
-                  selectedBatch === batch ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
-                }`}
-              >
-                {batch}
-              </button>
-            ))}
-          </div>
+          {adminSession?.role === "super-admin" && (
+            <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 shadow-xl">
+              {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
+                <button
+                  key={batch}
+                  onClick={() => {
+                    setSelectedBatch(batch);
+                    fetchAllData(adminSession, batch);
+                  }}
+                  className={`px-8 py-2.5 rounded-xl text-xs font-black transition-all ${
+                    selectedBatch === batch ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+                  }`}
+                >
+                  {batch}
+                </button>
+              ))}
+            </div>
+          )}
+
 
           
           <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
@@ -252,8 +258,8 @@ export default function AdminManagementPage() {
           </div>
         </div>
 
-        {/* Super Admin Domain Tabs */}
-        {adminSession?.role === "super-admin" && (
+        {/* Super Admin Domain Tabs - Only for Super Admin in 3rd Year */}
+        {adminSession?.role === "super-admin" && selectedBatch === "3rd Year Super 50" && (
           <div className="flex flex-wrap gap-3 pb-2 overflow-x-auto no-scrollbar">
             <Button variant={selectedDomain === null ? "default" : "glass"} onClick={() => setSelectedDomain(null)} className="rounded-full px-6 h-10 gap-2 border-white/5">
               <LayoutGrid className="w-4 h-4" /> All Domains
@@ -265,6 +271,7 @@ export default function AdminManagementPage() {
             ))}
           </div>
         )}
+
 
         {/* Search & Actions Bar */}
         <div className="flex flex-wrap gap-4 items-center justify-between">

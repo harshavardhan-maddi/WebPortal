@@ -44,13 +44,25 @@ export default function QuizCreationPage() {
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
     setAdminSession(session);
+    
+    const initialBatch = session.role === "super-admin" ? "3rd Year Super 50" : (session.batch || "3rd Year Super 50");
+    
     if (session.role === "domain-admin") {
-      setQuizData(prev => ({ ...prev, domain: session.domain, domains: [session.domain] }));
+      setQuizData(prev => ({ 
+        ...prev, 
+        domain: session.domain, 
+        domains: [session.domain],
+        batch: initialBatch 
+      }));
     } else {
-      setQuizData(prev => ({ ...prev, domains: ["cyber-security"] }));
+      setQuizData(prev => ({ 
+        ...prev, 
+        batch: initialBatch,
+        domains: ["cyber-security"] 
+      }));
     }
-
   }, []);
+
 
   const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY;
 
@@ -242,20 +254,27 @@ export default function QuizCreationPage() {
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
                 <Label>Target Batch</Label>
-                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-                  {["3rd Year Super 50", "4th Year Super 50"].map((b) => (
-                    <button
-                      key={b}
-                      onClick={() => setQuizData({...quizData, batch: b})}
-                      className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${
-                        quizData.batch === b ? 'bg-primary text-white' : 'text-muted-foreground hover:text-white'
-                      }`}
-                    >
-                      {b}
-                    </button>
-                  ))}
-                </div>
+                {adminSession?.role === "super-admin" ? (
+                  <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
+                    {["3rd Year Super 50", "4th Year Super 50"].map((b) => (
+                      <button
+                        key={b}
+                        onClick={() => setQuizData({...quizData, batch: b})}
+                        className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${
+                          quizData.batch === b ? 'bg-primary text-white' : 'text-muted-foreground hover:text-white'
+                        }`}
+                      >
+                        {b}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-primary">
+                    {quizData.batch}
+                  </div>
+                )}
               </div>
+
               <div className="space-y-2">
                 <Label>Quiz Title</Label>
                 <Input placeholder="e.g. Final Assessment" value={quizData.title} onChange={(e) => setQuizData({...quizData, title: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl text-lg" />

@@ -25,6 +25,20 @@ export default function ActiveStatusPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<string>("3rd Year Super 50");
+  const [adminSession, setAdminSession] = useState<any>(null);
+
+  useEffect(() => {
+    const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
+    setAdminSession(session);
+    
+    if (session.role !== "super-admin") {
+      setSelectedBatch(session.batch || "3rd Year Super 50");
+      if (session.role === "domain-admin") {
+        setSelectedDomain(session.domain);
+      }
+    }
+  }, []);
+
 
 
   useEffect(() => {
@@ -105,22 +119,25 @@ export default function ActiveStatusPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-          {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
-            <button
-              key={batch}
-              onClick={() => {
-                setSelectedBatch(batch);
-                setSelectedDomain(null);
-              }}
-              className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${
-                selectedBatch === batch ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
-              }`}
-            >
-              {batch}
-            </button>
-          ))}
-        </div>
+        {adminSession?.role === "super-admin" && (
+          <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
+            {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
+              <button
+                key={batch}
+                onClick={() => {
+                  setSelectedBatch(batch);
+                  setSelectedDomain(null);
+                }}
+                className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${
+                  selectedBatch === batch ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+                }`}
+              >
+                {batch}
+              </button>
+            ))}
+          </div>
+        )}
+
 
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -133,7 +150,7 @@ export default function ActiveStatusPage() {
           />
         </div>
         
-        {selectedBatch === "3rd Year Super 50" && (
+        {selectedBatch === "3rd Year Super 50" && adminSession?.role === "super-admin" && (
           <div className="flex gap-2">
             {['cyber-security', 'fsd', 'aiml', 'data-science'].map((dom) => (
               <button
@@ -148,6 +165,7 @@ export default function ActiveStatusPage() {
             ))}
           </div>
         )}
+
       </div>
 
 
