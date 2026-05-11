@@ -8,7 +8,7 @@ export default function CollegeLogo() {
       <img 
         src="/college_logo.png" 
         alt="College Logo" 
-        className="w-24 h-auto md:w-36 object-contain"
+        className="w-16 h-auto md:w-24 object-contain"
         onError={(e) => {
           (e.target as any).style.display = 'none';
         }}
