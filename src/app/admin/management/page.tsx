@@ -25,7 +25,9 @@ import {
   ShieldCheck,
   ExternalLink,
   Timer,
-  Filter
+  Filter,
+  MoreVertical,
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +42,7 @@ export default function AdminManagementPage() {
   const [results, setResults] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any>(null);
+  const [selectedQuizForGrades, setSelectedQuizForGrades] = useState<string | null>(null);
   const [newRollNumber, setNewRollNumber] = useState("");
   const [newStudentDomain, setNewStudentDomain] = useState("cyber-security");
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,20 +66,9 @@ export default function AdminManagementPage() {
 
     fetchAllData(session);
 
-    const resultsChannel = supabase
-      .channel('results_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => fetchAllData(session))
-      .subscribe();
-
-    const quizzesChannel = supabase
-      .channel('quizzes_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => fetchAllData(session))
-      .subscribe();
-
-    const studentsChannel = supabase
-      .channel('students_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchAllData(session))
-      .subscribe();
+    const resultsChannel = supabase.channel('results_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => fetchAllData(session)).subscribe();
+    const quizzesChannel = supabase.channel('quizzes_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => fetchAllData(session)).subscribe();
+    const studentsChannel = supabase.channel('students_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchAllData(session)).subscribe();
 
     return () => {
       supabase.removeChannel(resultsChannel);
@@ -118,10 +110,10 @@ export default function AdminManagementPage() {
   };
 
   const deleteQuiz = async (id: string) => {
-    if (!confirm("Are you sure?")) return;
+    if (!confirm("Delete quiz?")) return;
     await supabase.from('results').delete().eq('quiz_id', id);
-    const { error } = await supabase.from('quizzes').delete().eq('id', id);
-    if (!error) fetchAllData(adminSession);
+    await supabase.from('quizzes').delete().eq('id', id);
+    fetchAllData(adminSession);
   };
 
   const downloadExcel = (data: any[] = results) => {
@@ -133,6 +125,11 @@ export default function AdminManagementPage() {
     link.href = URL.createObjectURL(blob);
     link.download = `Report.csv`;
     link.click();
+  };
+
+  const getStudentScoreForQuiz = (rollNumber: string, quizId: string) => {
+    const result = results.find(r => r.roll_number === rollNumber && r.quiz_id === quizId);
+    return result ? result.score : null;
   };
 
   const filteredStudents = students.filter(s => 
@@ -185,20 +182,11 @@ export default function AdminManagementPage() {
         {/* Super Admin Domain Tabs */}
         {adminSession?.role === "super-admin" && (
           <div className="flex flex-wrap gap-3 pb-2 overflow-x-auto no-scrollbar">
-            <Button 
-              variant={selectedDomain === null ? "default" : "glass"} 
-              onClick={() => setSelectedDomain(null)}
-              className="rounded-full px-6 h-10 gap-2 border-white/5"
-            >
+            <Button variant={selectedDomain === null ? "default" : "glass"} onClick={() => setSelectedDomain(null)} className="rounded-full px-6 h-10 gap-2 border-white/5">
               <LayoutGrid className="w-4 h-4" /> All Domains
             </Button>
             {availableDomains.map(d => (
-              <Button 
-                key={d.id}
-                variant={selectedDomain === d.id ? "default" : "glass"} 
-                onClick={() => setSelectedDomain(d.id)}
-                className={`rounded-full px-6 h-10 gap-2 border-white/5 ${selectedDomain === d.id ? 'bg-primary shadow-lg shadow-primary/20' : ''}`}
-              >
+              <Button key={d.id} variant={selectedDomain === d.id ? "default" : "glass"} onClick={() => setSelectedDomain(d.id)} className={`rounded-full px-6 h-10 gap-2 border-white/5 ${selectedDomain === d.id ? 'bg-primary shadow-lg shadow-primary/20' : ''}`}>
                 <d.icon className="w-4 h-4" /> {d.name}
               </Button>
             ))}
@@ -210,20 +198,24 @@ export default function AdminManagementPage() {
           <div className="flex items-center gap-4 flex-1 max-w-2xl">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input 
-                type="text" 
-                placeholder={`Search ${activeTab}...`} 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-12 pl-12 pr-4 bg-white/5 rounded-2xl border border-white/10 focus:ring-1 ring-primary outline-none"
-              />
+              <input type="text" placeholder={`Search ${activeTab}...`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-12 pl-12 pr-4 bg-white/5 rounded-2xl border border-white/10 focus:ring-1 ring-primary outline-none" />
             </div>
           </div>
           
           {activeTab === "students" && (
-            <Button onClick={() => setIsAddModalOpen(true)} className="h-12 rounded-xl gap-2 font-bold px-8 shadow-lg shadow-primary/20">
-              <UserPlus className="w-4 h-4" /> Add Student
-            </Button>
+            <div className="flex gap-4">
+               <select 
+                value={selectedQuizForGrades || ""} 
+                onChange={(e) => setSelectedQuizForGrades(e.target.value || null)}
+                className="h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-xs font-bold outline-none cursor-pointer hover:bg-white/10 transition-all text-primary"
+               >
+                 <option value="" className="bg-[#050505]">View Overall List</option>
+                 {quizzes.map(q => <option key={q.id} value={q.id} className="bg-[#050505]">{q.title} ({q.date})</option>)}
+               </select>
+               <Button onClick={() => setIsAddModalOpen(true)} className="h-12 rounded-xl gap-2 font-bold px-8 shadow-lg shadow-primary/20">
+                <UserPlus className="w-4 h-4" /> Add Student
+              </Button>
+            </div>
           )}
 
           {activeTab === "results" && (
@@ -237,7 +229,20 @@ export default function AdminManagementPage() {
         <AnimatePresence mode="wait">
           {activeTab === "students" && (
             <motion.div key="students" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
-              {/* Grouped View for Super Admin */}
+              
+              {/* Conditional Gradebook View */}
+              {selectedQuizForGrades && (
+                <div className="bg-primary/5 border border-primary/20 p-6 rounded-[2rem] flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-black text-primary">Assessment Gradebook</h2>
+                    <p className="text-sm text-muted-foreground">Showing performance for: <span className="text-white font-bold">{quizzes.find(q => q.id === selectedQuizForGrades)?.title}</span></p>
+                  </div>
+                  <Button variant="glass" onClick={() => downloadExcel(results.filter(r => r.quiz_id === selectedQuizForGrades))} className="rounded-xl border-white/10">
+                    <Download className="w-4 h-4 mr-2" /> Download Quiz Report
+                  </Button>
+                </div>
+              )}
+
               {adminSession?.role === "super-admin" && selectedDomain === null ? (
                 availableDomains.map(domain => {
                   const domainStudents = students.filter(s => s.domain === domain.id && s.roll_number.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -245,46 +250,71 @@ export default function AdminManagementPage() {
                   return (
                     <div key={domain.id} className="space-y-4">
                       <div className="flex items-center gap-3 px-2">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                          <domain.icon className="w-4 h-4" />
-                        </div>
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary"><domain.icon className="w-4 h-4" /></div>
                         <h2 className="text-xl font-bold tracking-tight">{domain.name}</h2>
                         <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-muted-foreground font-black">{domainStudents.length}</span>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {domainStudents.map(student => (
-                          <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group">
-                            <div className="flex items-center gap-4">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                              <span className="font-bold">{student.roll_number}</span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {domainStudents.map(student => {
+                          const score = selectedQuizForGrades ? getStudentScoreForQuiz(student.roll_number, selectedQuizForGrades) : null;
+                          return (
+                            <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group relative overflow-hidden">
+                              <div className="flex items-center gap-4 relative z-10">
+                                <User className="w-5 h-5 text-muted-foreground" />
+                                <div>
+                                  <p className="font-bold">{student.roll_number}</p>
+                                  {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>}
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-4 relative z-10">
+                                {score !== null && (
+                                  <div className="text-right">
+                                    <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                    <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                                  </div>
+                                )}
+                                <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              {score !== null && <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />}
                             </div>
-                            <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        {domainStudents.length === 0 && <div className="col-span-full p-8 text-center text-muted-foreground text-sm glass rounded-2xl border-dashed border-white/5">No students in this domain.</div>}
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredStudents.map(student => (
-                    <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group">
-                      <div className="flex items-center gap-4">
-                        <User className="w-5 h-5 text-muted-foreground" />
-                        <div>
-                          <p className="font-bold">{student.roll_number}</p>
-                          <p className="text-[10px] uppercase font-black text-primary tracking-widest">{student.domain}</p>
+                  {filteredStudents.map(student => {
+                    const score = selectedQuizForGrades ? getStudentScoreForQuiz(student.roll_number, selectedQuizForGrades) : null;
+                    return (
+                      <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group relative overflow-hidden">
+                        <div className="flex items-center gap-4 relative z-10">
+                          <User className="w-5 h-5 text-muted-foreground" />
+                          <div>
+                            <p className="font-bold">{student.roll_number}</p>
+                            <p className="text-[10px] uppercase font-black text-primary tracking-widest">{student.domain}</p>
+                            {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Not Attempted</p>}
+                          </div>
                         </div>
+                        <div className="flex items-center gap-4 relative z-10">
+                          {score !== null && (
+                            <div className="text-right">
+                              <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                              <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                            </div>
+                          )}
+                          <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        {score !== null && <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />}
                       </div>
-                      <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {filteredStudents.length === 0 && <div className="col-span-full p-20 text-center text-muted-foreground glass rounded-[3rem] border-dashed border-white/10">No students found.</div>}
+                    );
+                  })}
                 </div>
               )}
             </motion.div>
@@ -307,7 +337,6 @@ export default function AdminManagementPage() {
                     <Button variant="ghost" onClick={() => deleteQuiz(q.id)} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-5 h-5" /></Button>
                   </div>
                ))}
-               {filteredQuizzes.length === 0 && <div className="p-20 text-center text-muted-foreground glass rounded-[3rem] border-dashed border-white/10">No quizzes found.</div>}
             </motion.div>
           )}
 
@@ -317,10 +346,7 @@ export default function AdminManagementPage() {
                  <div key={res.id} onClick={() => setSelectedResult(res)} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all cursor-pointer group">
                     <div className="md:col-span-3 flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{res.roll_number.slice(-2)}</div>
-                      <div>
-                        <p className="font-bold">{res.roll_number}</p>
-                        <p className="text-[10px] uppercase font-black text-muted-foreground">{res.domain}</p>
-                      </div>
+                      <div><p className="font-bold">{res.roll_number}</p><p className="text-[10px] uppercase font-black text-muted-foreground">{res.domain}</p></div>
                     </div>
                     <div className="md:col-span-4 border-l border-white/5 pl-6">
                       <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Test Name</p>
@@ -330,18 +356,15 @@ export default function AdminManagementPage() {
                       <p className="text-xs text-muted-foreground font-bold uppercase">Score</p>
                       <p className={`text-xl font-black ${res.score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{res.score}%</p>
                     </div>
-                    <div className="md:col-span-2 text-right opacity-60">
-                      <p className="text-xs font-bold">{new Date(res.timestamp).toLocaleDateString()}</p>
-                    </div>
+                    <div className="md:col-span-2 text-right opacity-60"><p className="text-xs font-bold">{new Date(res.timestamp).toLocaleDateString()}</p></div>
                     <div className="md:col-span-1 flex justify-end"><ExternalLink className="w-5 h-5 text-muted-foreground" /></div>
                  </div>
                ))}
-               {filteredResults.length === 0 && <div className="p-20 text-center text-muted-foreground glass rounded-[3rem] border-dashed border-white/10">No results found.</div>}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Detailed Result Modal */}
+        {/* Result Details Modal (Existing) */}
         <AnimatePresence>
           {selectedResult && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -350,10 +373,7 @@ export default function AdminManagementPage() {
                 <div className="flex justify-between items-start mb-10">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary"><User className="w-6 h-6" /></div>
-                    <div>
-                      <h2 className="text-3xl font-black">{selectedResult.roll_number}</h2>
-                      <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">{selectedResult.domain.replace('-', ' ')}</p>
-                    </div>
+                    <div><h2 className="text-3xl font-black">{selectedResult.roll_number}</h2><p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">{selectedResult.domain}</p></div>
                   </div>
                   <Button variant="ghost" onClick={() => setSelectedResult(null)}>✕</Button>
                 </div>
@@ -362,9 +382,7 @@ export default function AdminManagementPage() {
                   <div className="glass p-6 rounded-3xl text-center"><p className="text-xs font-black uppercase text-muted-foreground mb-1">Accuracy</p><p className="text-4xl font-black text-emerald-400">{Math.round((selectedResult.correct / selectedResult.total) * 100)}%</p></div>
                   <div className="glass p-6 rounded-3xl text-center"><p className="text-xs font-black uppercase text-muted-foreground mb-1">Time</p><p className="text-4xl font-black text-orange-400">{formatTime(selectedResult.time_taken)}</p></div>
                 </div>
-                <div className="flex gap-4">
-                  <Button onClick={() => downloadExcel([selectedResult])} className="flex-1 h-14 rounded-2xl font-bold bg-primary">Download Report</Button>
-                </div>
+                <Button onClick={() => downloadExcel([selectedResult])} className="w-full h-14 rounded-2xl font-bold bg-primary">Download Individual Report</Button>
               </motion.div>
             </div>
           )}
@@ -384,7 +402,7 @@ export default function AdminManagementPage() {
                   <div className="space-y-2"><Label>Roll Number</Label><Input placeholder="e.g. 24471A4652" value={newRollNumber} onChange={(e) => setNewRollNumber(e.target.value)} className="h-12 bg-white/5 border-white/10 rounded-xl" /></div>
                   <div className="space-y-2">
                     <Label>Assign Domain</Label>
-                    <select className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm disabled:opacity-50" disabled={adminSession?.role === "domain-admin"} value={adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain} onChange={(e) => setNewStudentDomain(e.target.value)}>
+                    <select className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm outline-none" disabled={adminSession?.role === "domain-admin"} value={adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain} onChange={(e) => setNewStudentDomain(e.target.value)}>
                       {availableDomains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
                   </div>

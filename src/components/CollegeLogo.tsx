@@ -6,12 +6,12 @@ export default function CollegeLogo() {
   return (
     <div className="fixed top-8 right-8 z-[60] pointer-events-none select-none">
       <img 
-        src="/college_logo.png" 
-        alt="NEC College Logo" 
-        className="w-24 h-auto md:w-36 object-contain"
+        src="/logo.png" 
+        alt="Techno Elite Logo" 
+        className="w-20 h-auto md:w-28 object-contain drop-shadow-[0_0_15px_rgba(58,123,213,0.4)]"
         onError={(e) => {
-          // Hide if image is missing to prevent broken icon
-          (e.target as any).style.display = 'none';
+          // Fallback to the original logo if missing
+          (e.target as any).src = '/college_logo.png';
         }}
       />
     </div>
