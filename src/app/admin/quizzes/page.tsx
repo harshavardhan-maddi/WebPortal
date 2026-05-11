@@ -29,19 +29,25 @@ export default function QuizCreationPage() {
   const [quizData, setQuizData] = useState({
     title: "",
     domain: "cyber-security",
+    domains: [] as string[], // New state for multiple domains
+    isAllDomains: false,     // New state for "All Domains"
     date: "",
     time: "",
     endTime: "",
     file: null as File | null,
   });
+
   const [adminSession, setAdminSession] = useState<any>(null);
 
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
     setAdminSession(session);
     if (session.role === "domain-admin") {
-      setQuizData(prev => ({ ...prev, domain: session.domain }));
+      setQuizData(prev => ({ ...prev, domain: session.domain, domains: [session.domain] }));
+    } else {
+      setQuizData(prev => ({ ...prev, domains: ["cyber-security"] }));
     }
+
   }, []);
 
   const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY;
@@ -172,16 +178,24 @@ export default function QuizCreationPage() {
     try {
       const questions = await processFile(quizData.file);
       
+      // Determine which domains to save
+      const targetDomains = quizData.isAllDomains 
+        ? ["all"] 
+        : quizData.domains;
+
+      const inserts = targetDomains.map(dom => ({
+        title: quizData.title,
+        domain: dom,
+        date: quizData.date,
+        time: quizData.time,
+        end_time: quizData.endTime,
+        questions: questions
+      }));
+
       const { error } = await supabase
         .from('quizzes')
-        .insert([{
-          title: quizData.title,
-          domain: quizData.domain,
-          date: quizData.date,
-          time: quizData.time,
-          end_time: quizData.endTime,
-          questions: questions
-        }]);
+        .insert(inserts);
+
 
       if (error) {
         throw new Error(`Supabase Error: ${error.message}`);
@@ -227,19 +241,52 @@ export default function QuizCreationPage() {
             </div>
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
-                <Label>Assigned Domain</Label>
-                <select 
-                  className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none cursor-pointer disabled:opacity-50"
-                  disabled={adminSession?.role === "domain-admin"}
-                  value={quizData.domain}
-                  onChange={(e) => setQuizData({...quizData, domain: e.target.value})}
-                >
-                  <option value="cyber-security">Cyber Security</option>
-                  <option value="fsd">Full Stack Development</option>
-                  <option value="aiml">AI & ML</option>
-                  <option value="data-science">Data Science</option>
-                </select>
+                <Label>Assigned Domains</Label>
+                {adminSession?.role === "domain-admin" ? (
+                  <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-primary capitalize">
+                    {quizData.domain.replace('-', ' ')}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-primary/40 transition-all cursor-pointer" onClick={() => setQuizData({...quizData, isAllDomains: !quizData.isAllDomains})}>
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${quizData.isAllDomains ? 'bg-primary border-primary' : 'border-white/20'}`}>
+                        {quizData.isAllDomains && <CheckCircle2 className="w-3 h-3 text-white" />}
+                      </div>
+                      <span className="font-bold text-sm">All Domains</span>
+                    </div>
+                    
+                    {!quizData.isAllDomains && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { id: "cyber-security", name: "Cyber Security" },
+                          { id: "fsd", name: "Full Stack Development" },
+                          { id: "aiml", name: "AI & ML" },
+                          { id: "data-science", name: "Data Science" },
+                        ].map((dom) => (
+                          <div 
+                            key={dom.id}
+                            onClick={() => {
+                              const newDomains = quizData.domains.includes(dom.id)
+                                ? quizData.domains.filter(d => d !== dom.id)
+                                : [...quizData.domains, dom.id];
+                              setQuizData({...quizData, domains: newDomains});
+                            }}
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                              quizData.domains.includes(dom.id) ? 'bg-primary/10 border-primary text-primary' : 'bg-white/5 border-white/10 text-muted-foreground'
+                            }`}
+                          >
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${quizData.domains.includes(dom.id) ? 'bg-primary border-primary' : 'border-white/20'}`}>
+                              {quizData.domains.includes(dom.id) && <CheckCircle2 className="w-2.5 h-2.5 text-white" />}
+                            </div>
+                            <span className="text-xs font-bold">{dom.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
               <div className="space-y-2">
                 <Label>Execution Date</Label>
                 <div className="relative">

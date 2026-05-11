@@ -86,8 +86,11 @@ export default function AdminManagementPage() {
     setStudents(sData || []);
 
     let quizzesQuery = supabase.from('quizzes').select('*').order('created_at', { ascending: false });
-    if (domainFilter) quizzesQuery = quizzesQuery.eq('domain', domainFilter);
+    if (domainFilter) {
+      quizzesQuery = quizzesQuery.or(`domain.eq.${domainFilter},domain.eq.all`);
+    }
     const { data: qData } = await quizzesQuery;
+
     setQuizzes(qData || []);
 
     let resultsQuery = supabase.from('results').select('*, quizzes(title, date)').order('timestamp', { ascending: false });
@@ -330,7 +333,10 @@ export default function AdminManagementPage() {
                         <p className="font-bold">{q.title}</p>
                         <div className="flex items-center gap-4 mt-1">
                           <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {q.time} - {q.end_time || '23:59'}</p>
-                          <p className="text-[10px] uppercase font-black text-primary tracking-tighter">{q.domain}</p>
+                          <p className="text-[10px] uppercase font-black text-primary tracking-tighter">
+                            {q.domain === 'all' ? 'All Domains' : q.domain.replace('-', ' ')}
+                          </p>
+
                         </div>
                       </div>
                     </div>
@@ -346,7 +352,8 @@ export default function AdminManagementPage() {
                  <div key={res.id} onClick={() => setSelectedResult(res)} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all cursor-pointer group">
                     <div className="md:col-span-3 flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{res.roll_number.slice(-2)}</div>
-                      <div><p className="font-bold">{res.roll_number}</p><p className="text-[10px] uppercase font-black text-muted-foreground">{res.domain}</p></div>
+                      <div><p className="font-bold">{res.roll_number}</p><p className="text-[10px] uppercase font-black text-muted-foreground">{res.domain === 'all' ? 'All Domains' : res.domain.replace('-', ' ')}</p></div>
+
                     </div>
                     <div className="md:col-span-4 border-l border-white/5 pl-6">
                       <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Test Name</p>

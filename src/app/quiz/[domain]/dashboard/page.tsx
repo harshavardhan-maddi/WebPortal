@@ -48,8 +48,9 @@ export default function StudentDashboard() {
       const { data: quizzes, error: qError } = await supabase
         .from('quizzes')
         .select('*')
-        .eq('domain', domain)
+        .or(`domain.eq.${domain},domain.eq.all`)
         .order('date', { ascending: false });
+
 
       if (qError) throw qError;
 
@@ -76,6 +77,8 @@ export default function StudentDashboard() {
       }));
 
       setAllQuizzes(processedQuizzes);
+      localStorage.setItem("global_quizzes", JSON.stringify(processedQuizzes));
+
     } catch (err) {
       console.error("Error fetching student dashboard data:", err);
     } finally {
