@@ -40,7 +40,34 @@ export default function StudentDashboard() {
     setStudent(studentData);
 
     fetchData(studentData);
+
+    // Presence Tracking
+    const channel = supabase.channel('online-students', {
+      config: {
+        presence: {
+          key: studentData.rollNumber,
+        },
+      },
+    });
+
+    channel
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            roll_number: studentData.rollNumber,
+            name: studentData.name,
+            domain: domain,
+            status: 'online',
+            last_seen: new Date().toISOString()
+          });
+        }
+      });
+
+    return () => {
+      channel.unsubscribe();
+    };
   }, [router, domain]);
+
 
   const fetchData = async (studentData: any) => {
     setIsLoading(true);

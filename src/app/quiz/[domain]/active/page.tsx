@@ -88,7 +88,34 @@ export default function ActiveQuizPage() {
 
     const session = JSON.parse(sessionStr);
     initializeAttempt(quizId, session);
+
+    // Presence Tracking
+    const channel = supabase.channel('online-students', {
+      config: {
+        presence: {
+          key: session.rollNumber,
+        },
+      },
+    });
+
+    channel
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            roll_number: session.rollNumber,
+            name: session.name,
+            domain: domain,
+            status: 'writing',
+            last_seen: new Date().toISOString()
+          });
+        }
+      });
+
+    return () => {
+      channel.unsubscribe();
+    };
   }, [router, domain]);
+
 
   const initializeAttempt = async (quizId: string, session: any) => {
     try {

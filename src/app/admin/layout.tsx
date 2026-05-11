@@ -15,8 +15,10 @@ import {
   ShieldCheck,
   Search,
   Plus,
-  User
+  User,
+  Activity
 } from "lucide-react";
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +45,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Dashboard", icon: LayoutDashboard, path: "/admin/super" },
     { name: "Quiz Engine", icon: BookOpen, path: "/admin/quizzes" },
     { name: "Management", icon: Users, path: "/admin/management" },
+    { name: "Active Status", icon: Activity, path: "/admin/active-status" },
     { name: "Settings", icon: Settings, path: "/admin/settings" },
+
   ];
 
 
