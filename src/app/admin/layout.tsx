@@ -14,8 +14,10 @@ import {
   ChevronRight,
   ShieldCheck,
   Search,
-  Plus
+  Plus,
+  User
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -41,11 +43,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Dashboard", icon: LayoutDashboard, path: "/admin/super" },
     { name: "Quiz Engine", icon: BookOpen, path: "/admin/quizzes" },
     { name: "Management", icon: Users, path: "/admin/management" },
+    { name: "Settings", icon: Settings, path: "/admin/settings" },
   ];
 
-  if (adminSession?.role === "super-admin") {
-    menuItems.push({ name: "Settings", icon: Settings, path: "/admin/settings" });
-  }
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white flex">
@@ -92,7 +92,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="p-4 mt-auto">
           <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-4">
             {!isCollapsed && (
-              <div className="flex items-center gap-3">
+              <Link href="/admin/settings" className="flex items-center gap-3 hover:bg-white/5 p-2 rounded-xl transition-colors cursor-pointer">
+
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyber-blue to-cyber-purple flex items-center justify-center text-white font-bold">
                   {adminSession?.name?.[0] || "A"}
                 </div>
@@ -100,8 +101,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <p className="text-sm font-bold truncate max-w-[120px]">{adminSession?.name || "Admin User"}</p>
                   <p className="text-xs text-muted-foreground capitalize">{adminSession?.role?.replace('-', ' ') || "Super Admin"}</p>
                 </div>
-              </div>
+              </Link>
             )}
+
             <button 
               onClick={handleLogout}
               className="flex items-center gap-4 p-2 w-full text-red-400 hover:text-red-300 transition-colors group"

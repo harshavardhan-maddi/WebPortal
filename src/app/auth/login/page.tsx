@@ -26,10 +26,12 @@ export default function AdminLoginPage() {
       // 1. SUPER ADMIN CHECK (Hardcoded master)
       if (email === "amcd@nrtec.in" && password === "nrtec@technoelite") {
         localStorage.setItem("admin_session", JSON.stringify({
+          id: "super-admin-id",
           role: "super-admin",
           name: "Super Admin",
           domain: "all"
         }));
+
         router.push("/admin/super");
         return;
       }
@@ -48,10 +50,12 @@ export default function AdminLoginPage() {
 
       if (foundAdmin) {
         localStorage.setItem("admin_session", JSON.stringify({
+          id: foundAdmin.id,
           role: "domain-admin",
           name: foundAdmin.name,
           domain: foundAdmin.domain
         }));
+
         router.push("/admin/super");
       } else {
         setError("Invalid credentials. Access Denied.");
