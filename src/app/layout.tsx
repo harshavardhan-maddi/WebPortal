@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   description: "Advanced Assessment Platform for Future Tech Professionals. Cyber Security, FSD, AI & ML, and Data Science quizzes.",
   keywords: ["Quiz", "Assessment", "Cyber Security", "FSD", "AI", "ML", "Data Science", "Techno Elite"],
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: "/college_logo.png",
+    apple: "/college_logo.png",
   }
 };
 
