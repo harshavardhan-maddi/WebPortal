@@ -29,8 +29,10 @@ export default function AdminLoginPage() {
           id: "super-admin-id",
           role: "super-admin",
           name: "Super Admin",
+          email: "amcd@nrtec.in",
           domain: "all"
         }));
+
 
         router.push("/admin/super");
         return;
@@ -53,8 +55,10 @@ export default function AdminLoginPage() {
           id: foundAdmin.id,
           role: "domain-admin",
           name: foundAdmin.name,
+          email: foundAdmin.email,
           domain: foundAdmin.domain
         }));
+
 
         router.push("/admin/super");
       } else {

@@ -116,28 +116,7 @@ export default function AdminControlCenter() {
         </motion.div>
       </div>
 
-      {/* Quick Actions List */}
-      <div className="glass p-8 rounded-[2.5rem] border border-white/5">
-        <h3 className="text-xl font-bold mb-6">Recent Admin Activity</h3>
-        <div className="space-y-4">
-          {[
-            { action: "Question Bank Uploaded", domain: "Cyber Security", time: "10 mins ago" },
-            { action: "Quiz Assigned", domain: "FSD", time: "1 hour ago" },
-            { action: "Report Generated", domain: "AI & ML", time: "Yesterday" },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-transparent hover:border-white/10 transition-all">
-              <div className="flex items-center gap-4">
-                <div className="w-2 h-2 rounded-full bg-primary" />
-                <div>
-                  <p className="font-medium">{item.action}</p>
-                  <p className="text-xs text-muted-foreground">{item.domain}</p>
-                </div>
-              </div>
-              <span className="text-xs text-muted-foreground">{item.time}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
+

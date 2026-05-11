@@ -398,16 +398,19 @@ export default function SettingsPage() {
                       <div className="space-y-2">
                         <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Current Email</Label>
                         <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-lg">
-                          <Mail className="w-5 h-5 mr-4 text-muted-foreground" /> {adminProfile?.email || "amcd@nrtec.in"}
+                          <Mail className="w-5 h-5 mr-4 text-muted-foreground" /> 
+                          {adminProfile?.email || session?.email || "Loading..."}
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Current Domain</Label>
                         <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-lg capitalize">
-                          <Shield className="w-5 h-5 mr-4 text-muted-foreground" /> {adminProfile?.domain?.replace('-', ' ') || "Full Access"}
+                          <Shield className="w-5 h-5 mr-4 text-muted-foreground" /> 
+                          {adminProfile?.domain ? adminProfile.domain.replace('-', ' ') : (session?.role === 'super-admin' ? "Full Access" : "Loading...")}
                         </div>
                       </div>
+
                     </div>
 
                     {session?.role === "domain-admin" && (
