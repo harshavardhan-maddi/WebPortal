@@ -30,7 +30,8 @@ export default function SettingsPage() {
     name: "",
     email: "",
     password: "",
-    domain: "cyber-security"
+    domain: "cyber-security",
+    batch: "3rd Year Super 50"
   });
   const [requests, setRequests] = useState<any[]>([]);
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
@@ -198,8 +199,15 @@ export default function SettingsPage() {
       alert(`Error creating admin: ${error.message}`);
     } else {
       setIsAddModalOpen(false);
-      setNewAdmin({ name: "", email: "", password: "", domain: "cyber-security" });
+      setNewAdmin({ 
+        name: "", 
+        email: "", 
+        password: "", 
+        domain: "cyber-security",
+        batch: "3rd Year Super 50"
+      });
     }
+
   };
 
   const removeAdmin = async (id: string) => {
@@ -300,9 +308,15 @@ export default function SettingsPage() {
                               <Lock className="w-3.5 h-3.5" /> {showPasswords[admin.id] ? admin.password : "••••••••"}
                             </span>
                             <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[10px] uppercase font-black tracking-widest border border-primary/20">
-                              {admin.domain.replace('-', ' ')}
+                              {admin.batch === "4th Year Super 50" ? "4th Year" : admin.domain.replace('-', ' ')}
                             </span>
+                            {admin.batch && (
+                              <span className="px-2.5 py-1 rounded-lg bg-white/5 text-muted-foreground text-[10px] uppercase font-black tracking-widest border border-white/10">
+                                {admin.batch}
+                              </span>
+                            )}
                           </div>
+
                         </div>
                       </div>
                       <Button variant="ghost" onClick={() => removeAdmin(admin.id)} className="w-12 h-12 rounded-2xl text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all">
@@ -505,18 +519,39 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Access Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input type="password" placeholder="••••••••" value={newAdmin.password} onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-6">
+
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input type="password" placeholder="••••••••" value={newAdmin.password} onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
-                    </div>
+                    <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Target Batch</Label>
+                    <select 
+                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none cursor-pointer"
+                      value={newAdmin.batch}
+                      onChange={(e) => {
+                        const batch = e.target.value;
+                        setNewAdmin({
+                          ...newAdmin, 
+                          batch: batch,
+                          domain: batch === "4th Year Super 50" ? "general" : newAdmin.domain
+                        });
+                      }}
+                    >
+                      <option value="3rd Year Super 50">3rd Year Super 50</option>
+                      <option value="4th Year Super 50">4th Year Super 50</option>
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Target Domain</Label>
                     <select 
-                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none cursor-pointer"
+                      disabled={newAdmin.batch === "4th Year Super 50"}
+                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       value={newAdmin.domain}
                       onChange={(e) => setNewAdmin({...newAdmin, domain: e.target.value})}
                     >
@@ -527,6 +562,7 @@ export default function SettingsPage() {
                     </select>
                   </div>
                 </div>
+
 
                 <div className="flex gap-4 pt-8">
                   <Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="flex-1 h-14 rounded-2xl font-bold">Cancel</Button>
