@@ -18,7 +18,13 @@ import {
   CheckCircle,
   XCircle,
   ArrowRight,
-  LayoutGrid
+  LayoutGrid,
+  TrendingUp,
+  FileDown,
+  User,
+  ShieldCheck,
+  ExternalLink,
+  Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +38,7 @@ export default function AdminManagementPage() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<any>(null);
   const [newRollNumber, setNewRollNumber] = useState("");
   const [newStudentDomain, setNewStudentDomain] = useState("cyber-security");
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,7 +52,6 @@ export default function AdminManagementPage() {
     { id: "data-science", name: "Data Science", color: "from-orange-500/20 to-red-500/20", icon: BarChart3 },
   ];
 
-  // Load Session and Initial Data
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
     setAdminSession(session);
@@ -59,8 +65,8 @@ export default function AdminManagementPage() {
     // Real-time Subscriptions
     const resultsChannel = supabase
       .channel('results_realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'results' }, (payload) => {
-        setResults(prev => [payload.new, ...prev]);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => {
+        fetchAllData(session);
       })
       .subscribe();
 
@@ -71,17 +77,9 @@ export default function AdminManagementPage() {
       })
       .subscribe();
 
-    const studentsChannel = supabase
-      .channel('students_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => {
-        fetchAllData(session);
-      })
-      .subscribe();
-
     return () => {
       supabase.removeChannel(resultsChannel);
       supabase.removeChannel(quizzesChannel);
-      supabase.removeChannel(studentsChannel);
     };
   }, []);
 
@@ -100,8 +98,12 @@ export default function AdminManagementPage() {
     const { data: qData } = await quizzesQuery;
     setQuizzes(qData || []);
 
-    // Fetch Results
-    let resultsQuery = supabase.from('results').select('*').order('timestamp', { ascending: false });
+    // Fetch Results with Quiz Details
+    let resultsQuery = supabase
+      .from('results')
+      .select('*, quizzes(title, date)')
+      .order('timestamp', { ascending: false });
+    
     if (domainFilter) resultsQuery = resultsQuery.eq('domain', domainFilter);
     const { data: rData } = await resultsQuery;
     setResults(rData || []);
@@ -109,58 +111,55 @@ export default function AdminManagementPage() {
 
   const handleAddStudent = async () => {
     if (!newRollNumber) return;
-    
     const domainToAssign = adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain;
-    
-    const { error } = await supabase
-      .from('students')
-      .insert([{
-        roll_number: newRollNumber,
-        domain: domainToAssign,
-        name: `Student ${newRollNumber}`
-      }]);
-
-    if (error) {
-      alert(`Error: ${error.message}`);
-    } else {
-      setNewRollNumber("");
-      setIsAddModalOpen(false);
-    }
+    const { error } = await supabase.from('students').insert([{ roll_number: newRollNumber, domain: domainToAssign, name: `Student ${newRollNumber}` }]);
+    if (error) alert(error.message); else { setNewRollNumber(""); setIsAddModalOpen(false); fetchAllData(adminSession); }
   };
 
   const removeStudent = async (id: string) => {
     if (!confirm("Remove student?")) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
-    if (error) alert(error.message);
+    if (!error) fetchAllData(adminSession);
   };
 
-  const downloadExcel = () => {
-    if (results.length === 0) return;
-    const headers = ["Roll Number", "Domain", "Score %", "Correct", "Incorrect", "Time Taken", "Date"];
-    const csvContent = [headers.join(","), ...results.map(r => [r.roll_number, r.domain, r.score, r.correct, r.incorrect, formatTime(r.time_taken), new Date(r.timestamp).toLocaleDateString()].join(","))].join("\n");
+  const deleteQuiz = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this quiz? This will also remove associated results.")) return;
+    
+    // Note: If you have foreign key constraints, you might need to delete results first 
+    // unless you set ON DELETE CASCADE in Supabase.
+    const { error: rError } = await supabase.from('results').delete().eq('quiz_id', id);
+    if (rError) console.error("Error deleting results:", rError);
+
+    const { error } = await supabase.from('quizzes').delete().eq('id', id);
+    if (error) alert(error.message); else fetchAllData(adminSession);
+  };
+
+  const downloadExcel = (data: any[] = results) => {
+    if (data.length === 0) return;
+    const headers = ["Roll Number", "Test Name", "Domain", "Score %", "Correct", "Incorrect", "Time Taken", "Date"];
+    const csvContent = [
+      headers.join(","), 
+      ...data.map(r => [
+        r.roll_number, 
+        r.quizzes?.title || "Unknown Test", 
+        r.domain, 
+        r.score, 
+        r.correct, 
+        r.incorrect, 
+        formatTime(r.time_taken), 
+        new Date(r.timestamp).toLocaleDateString()
+      ].join(","))
+    ].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
-    link.setAttribute("href", URL.createObjectURL(blob));
-    link.setAttribute("download", `Results_${new Date().toLocaleDateString()}.csv`);
+    link.href = URL.createObjectURL(blob);
+    link.download = `Report_${new Date().toLocaleDateString()}.csv`;
     link.click();
   };
 
-  const getStudentCount = (domainId: string) => {
-    return students.filter((s: any) => s.domain === domainId).length;
-  };
-
-  const filteredStudents = students.filter(s => 
-    s.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) && 
-    (selectedDomain ? s.domain === selectedDomain : true)
-  );
-
-  const filteredQuizzes = quizzes.filter(q => 
-    q.title.toLowerCase().includes(searchQuery.toLowerCase()) && 
-    (selectedDomain ? q.domain === selectedDomain : true)
-  );
-
   const filteredResults = results.filter(r => 
-    r.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    (r.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) || 
+     r.quizzes?.title?.toLowerCase().includes(searchQuery.toLowerCase())) && 
     (selectedDomain ? r.domain === selectedDomain : true)
   );
 
@@ -198,16 +197,11 @@ export default function AdminManagementPage() {
         {/* Search & Actions Bar */}
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex items-center gap-4 flex-1 max-w-2xl">
-            {adminSession?.role === "super-admin" && selectedDomain && activeTab === "students" && (
-              <Button variant="glass" onClick={() => setSelectedDomain(null)} className="rounded-xl h-12 px-4 gap-2 border-white/10">
-                <ChevronLeft className="w-4 h-4" /> Domains
-              </Button>
-            )}
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input 
                 type="text" 
-                placeholder={`Search ${activeTab}...`} 
+                placeholder={`Search by Roll Number or Test Name...`} 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full h-12 pl-12 pr-4 bg-white/5 rounded-2xl border border-white/10 focus:ring-1 ring-primary outline-none"
@@ -217,125 +211,177 @@ export default function AdminManagementPage() {
           
           {activeTab === "students" && (
             <Button onClick={() => setIsAddModalOpen(true)} className="h-12 rounded-xl gap-2 font-bold px-8 shadow-lg shadow-primary/20">
-              <UserPlus className="w-4 h-4" /> Add New Student
+              <UserPlus className="w-4 h-4" /> Add Student
             </Button>
           )}
 
           {activeTab === "results" && (
-            <Button onClick={downloadExcel} className="h-12 rounded-xl gap-2 font-bold px-8 bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
-              <Download className="w-4 h-4" /> Download Excel Report
+            <Button onClick={() => downloadExcel()} className="h-12 rounded-xl gap-2 font-bold px-8 bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
+              <Download className="w-4 h-4" /> Export All Data
             </Button>
           )}
         </div>
 
         {/* Content Area */}
         <AnimatePresence mode="wait">
-          {activeTab === "students" && (
-            <motion.div key="students-view">
-              {adminSession?.role === "super-admin" && !selectedDomain ? (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {availableDomains.map((domain) => (
-                    <motion.div
-                      key={domain.id}
-                      whileHover={{ y: -5, borderColor: "rgba(255,255,255,0.2)" }}
-                      onClick={() => setSelectedDomain(domain.id)}
-                      className="glass p-8 rounded-[2.5rem] border border-white/5 cursor-pointer group relative overflow-hidden"
+          {activeTab === "results" ? (
+            <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              {filteredResults.length === 0 ? (
+                <div className="p-20 text-center glass rounded-[2.5rem] border-dashed border-white/10">
+                  <BarChart3 className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-20" />
+                  <p className="text-muted-foreground">No assessment data found.</p>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredResults.map((res) => (
+                    <motion.div 
+                      key={res.id} 
+                      onClick={() => setSelectedResult(res)}
+                      whileHover={{ scale: 1.01 }}
+                      className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all cursor-pointer group"
                     >
-                      <div className={`absolute inset-0 bg-gradient-to-br ${domain.color} opacity-0 group-hover:opacity-100 transition-opacity`} />
-                      <div className="relative z-10 flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                          <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-primary">
-                            <domain.icon className="w-8 h-8" />
-                          </div>
-                          <div>
-                            <h3 className="text-2xl font-bold">{domain.name}</h3>
-                            <p className="text-muted-foreground text-sm font-medium">{getStudentCount(domain.id)} Registered Students</p>
-                          </div>
+                      <div className="md:col-span-3 flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                          {res.roll_number.slice(-2)}
                         </div>
-                        <ArrowRight className="w-6 h-6 text-muted-foreground group-hover:text-white transition-all group-hover:translate-x-2" />
+                        <div>
+                          <p className="font-bold text-lg leading-tight">{res.roll_number}</p>
+                          <p className="text-[10px] uppercase font-black text-muted-foreground tracking-tighter">{res.domain}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="md:col-span-4 border-l border-white/5 pl-6">
+                        <p className="text-xs text-muted-foreground font-bold flex items-center gap-1.5 uppercase"><FileText className="w-3 h-3" /> Test Name</p>
+                        <p className="font-bold truncate">{res.quizzes?.title || "System Quiz"}</p>
+                      </div>
+
+                      <div className="md:col-span-2 text-center">
+                        <p className="text-xs text-muted-foreground font-bold uppercase">Score</p>
+                        <p className={`text-xl font-black ${res.score >= 70 ? 'text-emerald-400' : res.score >= 40 ? 'text-orange-400' : 'text-red-400'}`}>
+                          {res.score}%
+                        </p>
+                      </div>
+
+                      <div className="md:col-span-2 text-right opacity-60 group-hover:opacity-100 transition-opacity">
+                        <p className="text-xs font-bold">{new Date(res.timestamp).toLocaleDateString()}</p>
+                        <p className="text-[10px] font-medium">{new Date(res.timestamp).toLocaleTimeString()}</p>
+                      </div>
+
+                      <div className="md:col-span-1 flex justify-end">
+                        <ExternalLink className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
                     </motion.div>
                   ))}
                 </div>
-              ) : (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
-                  {filteredStudents.length === 0 ? (
-                    <div className="p-20 text-center glass rounded-[2.5rem] border-dashed border-white/10">
-                      <Users className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-20" />
-                      <p className="text-muted-foreground">No students found.</p>
-                    </div>
-                  ) : (
-                    filteredStudents.map((student) => (
-                      <div key={student.id} className="glass p-6 rounded-3xl border border-white/5 flex items-center justify-between hover:border-white/10 transition-colors group">
-                        <div className="flex items-center gap-5">
-                          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                            <Users className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-xl tracking-tight">{student.roll_number}</h3>
-                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">{student.domain.replace('-', ' ')}</p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-12 h-12 rounded-2xl text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
-                          <Trash2 className="w-5 h-5" />
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </motion.div>
               )}
             </motion.div>
-          )}
-
-          {activeTab === "quizzes" && (
-            <motion.div key="quizzes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
-              {filteredQuizzes.length === 0 ? (
-                <div className="p-20 text-center glass rounded-[2.5rem] border-dashed border-white/10">
-                  <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground">No tests scheduled.</p>
-                </div>
-              ) : (
-                filteredQuizzes.map((quiz) => (
-                  <div key={quiz.id} className="glass p-6 rounded-3xl border border-white/5 flex items-center justify-between hover:border-white/10 transition-colors group">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400">
-                        <FileText className="w-6 h-6" />
+          ) : activeTab === "students" ? (
+             <motion.div key="students" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
+                {students.map((s) => (
+                   <div key={s.id} className="glass p-6 rounded-3xl border border-white/5 flex items-center justify-between group">
+                      <div className="flex items-center gap-4">
+                        <User className="w-6 h-6 text-primary" />
+                        <div>
+                          <p className="font-bold">{s.roll_number}</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-widest">{s.domain}</p>
+                        </div>
                       </div>
+                      <Button variant="ghost" onClick={() => removeStudent(s.id)} className="text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-5 h-5" /></Button>
+                   </div>
+                ))}
+             </motion.div>
+          ) : (
+            <motion.div key="quizzes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
+               {quizzes.map((q) => (
+                  <div key={q.id} className="glass p-6 rounded-3xl border border-white/5 flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                      <Calendar className="w-6 h-6 text-purple-400" />
                       <div>
-                        <h3 className="font-bold text-lg">{quiz.title}</h3>
-                        <p className="text-xs text-muted-foreground uppercase font-bold">{quiz.domain.replace('-', ' ')}</p>
+                        <p className="font-bold">{q.title}</p>
+                        <div className="flex items-center gap-4 mt-1">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {q.time} - {q.end_time || '23:59'}</p>
+                          <p className="text-xs text-muted-foreground uppercase font-black tracking-tighter">{q.domain}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <Button variant="ghost" onClick={() => deleteQuiz(q.id)} className="text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 className="w-5 h-5" />
+                    </Button>
+                  </div>
+               ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Detailed Result Modal */}
+        <AnimatePresence>
+          {selectedResult && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedResult(null)} className="absolute inset-0 bg-black/90 backdrop-blur-md" />
+              <motion.div 
+                layoutId={selectedResult.id}
+                className="relative w-full max-w-2xl glass rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden"
+              >
+                <div className="p-12 space-y-10">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary shadow-lg shadow-primary/20">
+                          <User className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-3xl font-black">{selectedResult.roll_number}</h2>
+                      </div>
+                      <p className="text-muted-foreground text-sm uppercase tracking-widest font-bold ml-1">{selectedResult.domain.replace('-', ' ')} Professional</p>
+                    </div>
+                    <Button variant="ghost" onClick={() => setSelectedResult(null)} className="rounded-full w-10 h-10 p-0 text-white/40 hover:text-white">✕</Button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="glass p-6 rounded-3xl border border-white/5 text-center">
+                      <p className="text-xs font-black uppercase text-muted-foreground mb-1 tracking-widest">Score</p>
+                      <p className="text-4xl font-black text-primary">{selectedResult.score}%</p>
+                    </div>
+                    <div className="glass p-6 rounded-3xl border border-white/5 text-center">
+                      <p className="text-xs font-black uppercase text-muted-foreground mb-1 tracking-widest">Accuracy</p>
+                      <p className="text-4xl font-black text-emerald-400">
+                        {Math.round((selectedResult.correct / selectedResult.total) * 100)}%
+                      </p>
+                    </div>
+                    <div className="glass p-6 rounded-3xl border border-white/5 text-center">
+                      <p className="text-xs font-black uppercase text-muted-foreground mb-1 tracking-widest">Time</p>
+                      <p className="text-4xl font-black text-orange-400">{formatTime(selectedResult.time_taken)}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 glass rounded-2xl border border-white/5">
+                      <span className="text-muted-foreground font-bold">Assessment Name</span>
+                      <span className="font-bold">{selectedResult.quizzes?.title || "System Quiz"}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-4 glass rounded-2xl border border-white/5">
+                      <span className="text-muted-foreground font-bold">Submission Date</span>
+                      <span className="font-bold">{new Date(selectedResult.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-4 glass rounded-2xl border border-white/5">
+                      <span className="text-muted-foreground font-bold">Detailed Metrics</span>
+                      <div className="flex gap-4">
+                        <span className="text-emerald-400 font-black">✓ {selectedResult.correct}</span>
+                        <span className="text-red-400 font-black">✕ {selectedResult.incorrect}</span>
                       </div>
                     </div>
                   </div>
-                ))
-              )}
-            </motion.div>
-          )}
 
-          {activeTab === "results" && (
-            <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
-              {filteredResults.length === 0 ? (
-                <div className="p-20 text-center glass rounded-[2.5rem] border-dashed border-white/10">
-                  <BarChart3 className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground">No results recorded.</p>
+                  <div className="flex gap-4 pt-6">
+                    <Button onClick={() => downloadExcel([selectedResult])} className="flex-1 h-16 rounded-2xl gap-3 font-bold text-lg bg-primary hover:scale-[1.02] active:scale-95 transition-all">
+                      <FileDown className="w-6 h-6" /> Download PDF Report
+                    </Button>
+                    <Button onClick={() => downloadExcel([selectedResult])} variant="glass" className="flex-1 h-16 rounded-2xl gap-3 font-bold text-lg border-white/10 hover:bg-white/5">
+                      <TrendingUp className="w-6 h-6" /> Export Excel
+                    </Button>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                   {filteredResults.map((res) => (
-                    <div key={res.id} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-5 items-center hover:border-white/10 transition-colors">
-                      <span className="font-bold text-lg">{res.roll_number}</span>
-                      <span className="text-primary font-bold">{res.score}%</span>
-                      <div className="flex items-center gap-4">
-                        <span className="flex items-center gap-1 text-emerald-400"><CheckCircle className="w-3 h-3" /> {res.correct}</span>
-                        <span className="flex items-center gap-1 text-red-400"><XCircle className="w-3 h-3" /> {res.incorrect}</span>
-                      </div>
-                      <span className="text-muted-foreground text-sm font-medium">{res.domain.replace('-', ' ')}</span>
-                      <span className="text-muted-foreground text-sm text-right">{formatTime(res.time_taken)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
 

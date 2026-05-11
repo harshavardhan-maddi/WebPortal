@@ -11,7 +11,8 @@ import {
   Plus, 
   FileText,
   AlertCircle,
-  ChevronLeft
+  ChevronLeft,
+  Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ export default function QuizCreationPage() {
     domain: "cyber-security",
     date: "",
     time: "",
+    endTime: "",
     file: null as File | null,
   });
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -156,8 +158,8 @@ export default function QuizCreationPage() {
   };
 
   const nextStep = () => {
-    if (step === 1 && (!quizData.title || !quizData.date || !quizData.time)) {
-      alert("Please fill in all basic quiz details.");
+    if (step === 1 && (!quizData.title || !quizData.date || !quizData.time || !quizData.endTime)) {
+      alert("Please fill in all quiz details including start and end times.");
       return;
     }
     setStep(step + 1);
@@ -177,6 +179,7 @@ export default function QuizCreationPage() {
           domain: quizData.domain,
           date: quizData.date,
           time: quizData.time,
+          end_time: quizData.endTime,
           questions: questions
         }]);
 
@@ -245,11 +248,20 @@ export default function QuizCreationPage() {
                 </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Schedule Time</Label>
-              <div className="relative">
-                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input type="time" value={quizData.time} onChange={(e) => setQuizData({...quizData, time: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <Label>Starting Time</Label>
+                <div className="relative">
+                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input type="time" value={quizData.time} onChange={(e) => setQuizData({...quizData, time: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Closing Time (Auto-Delete)</Label>
+                <div className="relative">
+                  <Timer className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400" />
+                  <Input type="time" value={quizData.endTime} onChange={(e) => setQuizData({...quizData, endTime: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
+                </div>
               </div>
             </div>
             <Button onClick={nextStep} className="w-full h-14 rounded-2xl text-lg font-bold">Configure Questions <ArrowRight className="ml-2 w-5 h-5" /></Button>
@@ -283,7 +295,7 @@ export default function QuizCreationPage() {
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass p-12 rounded-[3.5rem] border border-white/5 text-center">
             <div className="w-24 h-24 bg-emerald-500/20 rounded-[2.5rem] flex items-center justify-center text-emerald-400 mx-auto mb-8 shadow-[0_0_50px_rgba(16,185,129,0.3)]"><CheckCircle2 className="w-12 h-12" /></div>
             <h2 className="text-4xl font-black mb-4">Quiz Deployed!</h2>
-            <p className="text-xl text-muted-foreground max-w-lg mx-auto mb-10">Your assessment is now live and scheduled. Students in the {quizData.domain.replace('-', ' ')} domain can now access it.</p>
+            <p className="text-xl text-muted-foreground max-w-lg mx-auto mb-10">Your assessment is now live and scheduled. It will be automatically hidden from students after {quizData.endTime}.</p>
             <div className="flex gap-4 max-w-md mx-auto">
               <Button onClick={() => window.location.href = "/admin/management"} className="flex-1 h-14 rounded-2xl font-bold">Go to Management</Button>
               <Button variant="glass" onClick={() => window.location.reload()} className="flex-1 h-14 rounded-2xl font-bold">Create Another</Button>
