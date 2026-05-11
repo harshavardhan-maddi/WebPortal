@@ -33,6 +33,7 @@ export default function ActiveQuizPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [attemptId, setAttemptId] = useState<string | null>(null);
   
   // Camera Proctoring States
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -69,46 +70,77 @@ export default function ActiveQuizPage() {
     };
   }, []);
 
-  // Load Quiz Data from Supabase
+  // Load Quiz Data and Initialize Attempt
   useEffect(() => {
-    const session = localStorage.getItem("student_session");
-    if (!session) {
+    const sessionStr = localStorage.getItem("student_session");
+    if (!sessionStr) {
       router.push("/quiz/auth");
       return;
     }
 
     const params = new URLSearchParams(window.location.search);
     const quizId = params.get("quizId");
-
     if (!quizId) {
       setError("No assessment ID provided.");
       setIsLoading(false);
       return;
     }
 
-    fetchQuiz(quizId);
+    const session = JSON.parse(sessionStr);
+    initializeAttempt(quizId, session);
   }, [router, domain]);
 
-  const fetchQuiz = async (quizId: string) => {
+  const initializeAttempt = async (quizId: string, session: any) => {
     try {
-      const { data, error } = await supabase
+      // 1. Check if student already has a result for this quiz
+      const { data: existing } = await supabase
+        .from('results')
+        .select('id')
+        .eq('quiz_id', quizId)
+        .eq('roll_number', session.rollNumber)
+        .single();
+
+      if (existing) {
+        setError("You have already attempted this exam. Multiple attempts are not allowed.");
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Fetch Quiz
+      const { data: quizData, error: qError } = await supabase
         .from('quizzes')
         .select('*')
         .eq('id', quizId)
         .single();
 
-      if (error) throw error;
+      if (qError) throw qError;
 
-      if (data && data.questions) {
-        setQuestions(data.questions);
-        setIsLoading(false);
-      } else {
-        setError("Assessment not found or has no questions.");
-        setIsLoading(false);
-      }
+      // 3. Create an "Incomplete" entry immediately to lock the attempt
+      // If the student closes the browser now, they won't be able to re-enter.
+      const { data: newResult, error: rError } = await supabase
+        .from('results')
+        .insert([{
+          quiz_id: quizId,
+          domain: domain,
+          roll_number: session.rollNumber,
+          score: 0,
+          correct: 0,
+          incorrect: 0,
+          total: quizData.questions.length,
+          time_taken: 0
+        }])
+        .select()
+        .single();
+
+      if (rError) throw rError;
+
+      setAttemptId(newResult.id);
+      setQuestions(quizData.questions);
+      setIsLoading(false);
+
     } catch (err: any) {
-      console.error("Fetch Quiz Error:", err);
-      setError(`Failed to load assessment: ${err.message}`);
+      console.error("Init Error:", err);
+      setError(`Initialization failed: ${err.message}`);
       setIsLoading(false);
     }
   };
@@ -128,16 +160,6 @@ export default function ActiveQuizPage() {
       }
     };
 
-    // Monitor Camera Tracks
-    const checkCamera = setInterval(() => {
-      if (cameraStream) {
-        const videoTrack = cameraStream.getVideoTracks()[0];
-        if (!videoTrack || !videoTrack.enabled || videoTrack.readyState === 'ended') {
-          setCameraStatus("denied");
-        }
-      }
-    }, 2000);
-
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'p')) {
@@ -150,7 +172,6 @@ export default function ActiveQuizPage() {
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      clearInterval(checkCamera);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("keydown", handleKeyDown);
@@ -174,7 +195,6 @@ export default function ActiveQuizPage() {
       [currentQuestion.id || currentQuestionIndex]: [optionIndex]
     }));
 
-    // Auto-advance
     if (currentQuestionIndex < questions.length - 1) {
       setTimeout(() => {
         setCurrentQuestionIndex(prev => prev + 1);
@@ -183,16 +203,14 @@ export default function ActiveQuizPage() {
   };
 
   const handleSubmit = useCallback(async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || !attemptId) return;
+    
+    setIsSubmitting(true);
     
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
     }
 
-    setIsSubmitting(true);
-    
-    // Calculate Real Score
     let correctCount = 0;
     const totalQuestions = questions.length;
     
@@ -205,46 +223,37 @@ export default function ActiveQuizPage() {
 
     const incorrectCount = totalQuestions - correctCount;
     const finalScore = Math.round((correctCount / totalQuestions) * 100);
-
-    const params = new URLSearchParams(window.location.search);
-    const quizId = params.get("quizId");
-    
     const session = JSON.parse(localStorage.getItem("student_session") || "{}");
-    const rollNumber = session.rollNumber || "guest";
 
     try {
-      // Save to Supabase
+      // Update the existing "Incomplete" result with the final scores
       const { error } = await supabase
         .from('results')
-        .insert([{
-          quiz_id: quizId,
-          domain: domain,
-          roll_number: rollNumber,
+        .update({
           score: finalScore,
           correct: correctCount,
           incorrect: incorrectCount,
           total: totalQuestions,
           time_taken: 1800 - timeLeft
-        }]);
+        })
+        .eq('id', attemptId);
 
       if (error) throw error;
 
-      // Also save locally for the result page to read immediately
-      const resultData = {
+      localStorage.setItem("quiz_result", JSON.stringify({
         score: finalScore,
         correct: correctCount,
         incorrect: incorrectCount,
         total: totalQuestions,
-        rollNumber: rollNumber
-      };
-      localStorage.setItem("quiz_result", JSON.stringify(resultData));
+        rollNumber: session.rollNumber
+      }));
 
       router.push(`/quiz/${domain}/results`);
     } catch (err: any) {
-      alert(`Submission failed: ${err.message}. Please contact the administrator.`);
-      setIsSubmitting(false);
+      alert(`Submission failed: ${err.message}. Your progress was recorded as far as possible.`);
+      router.push(`/quiz/${domain}/dashboard`);
     }
-  }, [answers, domain, router, timeLeft, isSubmitting, questions]);
+  }, [answers, domain, router, timeLeft, isSubmitting, questions, attemptId]);
 
   if (isLoading) {
     return (
@@ -258,7 +267,7 @@ export default function ActiveQuizPage() {
     return (
       <div className="min-h-screen bg-[#05060f] flex flex-col items-center justify-center p-6 text-center">
         <AlertTriangle className="w-16 h-16 text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+        <h2 className="text-2xl font-bold mb-2">Access Restricted</h2>
         <p className="text-muted-foreground mb-6">{error || "This quiz is no longer available."}</p>
         <Button onClick={() => router.push(`/quiz/${domain}/dashboard`)}>Back to Dashboard</Button>
       </div>
