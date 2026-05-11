@@ -26,6 +26,8 @@ const formatTime = (seconds: number) => {
 
 export default function AdminControlCenter() {
   const [session, setSession] = React.useState<any>(null);
+  const [isExporting, setIsExporting] = React.useState(false);
+
 
   React.useEffect(() => {
     const s = JSON.parse(localStorage.getItem("admin_session") || "{}");
@@ -33,15 +35,18 @@ export default function AdminControlCenter() {
   }, []);
 
   const downloadReport = async () => {
+    setIsExporting(true);
     try {
       const { data: results, error } = await supabase
         .from('results')
         .select('*, quizzes(title, date)')
+        .eq('batch', session?.batch || '3rd Year Super 50')
         .order('timestamp', { ascending: false });
 
       if (error) throw error;
       if (!results || results.length === 0) {
-        alert("No results found to export.");
+        alert("No results found for the current batch.");
+        setIsExporting(false);
         return;
       }
 
@@ -66,11 +71,15 @@ export default function AdminControlCenter() {
         XLSX.utils.book_append_sheet(workbook, worksheet, domain.replace('-', ' ').toUpperCase().slice(0, 31));
       });
 
-      XLSX.writeFile(workbook, `Consolidated_Report_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+      const batchName = session?.batch || 'Consolidated';
+      XLSX.writeFile(workbook, `${batchName}_Report_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
     } catch (err: any) {
       alert(`Export failed: ${err.message}`);
+    } finally {
+      setIsExporting(false);
     }
   };
+
 
 
   const adminDomain = session?.domain || "all";
@@ -155,10 +164,13 @@ export default function AdminControlCenter() {
           <div className="space-y-3">
             <Button 
               onClick={downloadReport}
-              className="w-full justify-between group rounded-xl h-12 bg-emerald-600 hover:bg-emerald-500"
+              disabled={isExporting}
+              className="w-full justify-between group rounded-xl h-12 bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20"
             >
-              Download Excel Report <Download className="w-4 h-4" />
+              {isExporting ? "Processing..." : "Download Excel Report"} 
+              {isExporting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-4 h-4" />}
             </Button>
+
 
             <Button variant="glass" className="w-full justify-between rounded-xl h-12">
               Sync Google Sheets <ShieldCheck className="w-4 h-4" />
