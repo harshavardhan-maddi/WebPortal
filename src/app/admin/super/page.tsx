@@ -14,6 +14,15 @@ import {
   Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
+import * as XLSX from 'xlsx';
+
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 
 export default function AdminControlCenter() {
   const [session, setSession] = React.useState<any>(null);
@@ -22,6 +31,47 @@ export default function AdminControlCenter() {
     const s = JSON.parse(localStorage.getItem("admin_session") || "{}");
     setSession(s);
   }, []);
+
+  const downloadReport = async () => {
+    try {
+      const { data: results, error } = await supabase
+        .from('results')
+        .select('*, quizzes(title, date)')
+        .order('timestamp', { ascending: false });
+
+      if (error) throw error;
+      if (!results || results.length === 0) {
+        alert("No results found to export.");
+        return;
+      }
+
+      const workbook = XLSX.utils.book_new();
+      const domains = Array.from(new Set(results.map(r => r.domain || 'general')));
+
+      domains.forEach(domain => {
+        const domainData = results.filter(r => (r.domain || 'general') === domain);
+        const sheetData = domainData.map(r => ({
+          "Roll Number": r.roll_number,
+          "Test Name": r.quizzes?.title || "System Test",
+          "Domain": domain.replace('-', ' ').toUpperCase(),
+          "Score %": `${r.score}%`,
+          "Correct": r.correct,
+          "Incorrect": r.incorrect,
+          "Total Questions": r.total,
+          "Time Taken": formatTime(r.time_taken),
+          "Date": new Date(r.timestamp).toLocaleDateString()
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(sheetData);
+        XLSX.utils.book_append_sheet(workbook, worksheet, domain.replace('-', ' ').toUpperCase().slice(0, 31));
+      });
+
+      XLSX.writeFile(workbook, `Consolidated_Report_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    }
+  };
+
 
   const adminDomain = session?.domain || "all";
   const adminRole = session?.role || "super-admin";
@@ -104,11 +154,12 @@ export default function AdminControlCenter() {
           </p>
           <div className="space-y-3">
             <Button 
-              onClick={() => alert("Downloading student reports in Excel format...")}
+              onClick={downloadReport}
               className="w-full justify-between group rounded-xl h-12 bg-emerald-600 hover:bg-emerald-500"
             >
               Download Excel Report <Download className="w-4 h-4" />
             </Button>
+
             <Button variant="glass" className="w-full justify-between rounded-xl h-12">
               Sync Google Sheets <ShieldCheck className="w-4 h-4" />
             </Button>
