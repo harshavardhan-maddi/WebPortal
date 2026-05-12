@@ -59,8 +59,10 @@ export default function AdminLoginPage() {
           name: foundAdmin.name,
           email: foundAdmin.email,
           domain: foundAdmin.domain,
+          batch: foundAdmin.batch,
           token: "domain-key-" + Math.random().toString(36).substring(7)
         }));
+
 
 
 
