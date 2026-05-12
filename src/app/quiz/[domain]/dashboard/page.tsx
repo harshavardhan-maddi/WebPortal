@@ -77,8 +77,10 @@ export default function StudentDashboard() {
       const { data: quizzes, error: qError } = await supabase
         .from('quizzes')
         .select('*')
+        .eq('batch', studentData.batch)
         .or(`domain.eq.${domain},domain.eq.all`)
         .order('date', { ascending: false });
+
 
 
       if (qError) throw qError;
