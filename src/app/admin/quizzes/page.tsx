@@ -213,8 +213,6 @@ export default function QuizCreationPage() {
   };
 
   const removeQuestion = (index: number) => setQuestions(questions.filter((_, i) => i !== index));
-  const addManualQuestion = () => setQuestions([...questions, { text: "", options: ["", "", "", ""], correctAnswer: 0 }]);
-  const nextStep = () => { if (step === 1 && (!quizData.title || !quizData.date || !quizData.time || !quizData.endTime)) return alert("Fill all details."); setStep(step + 1); };
 
   return (
     <div className="max-w-4xl mx-auto py-10">
