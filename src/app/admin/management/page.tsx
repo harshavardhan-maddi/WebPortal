@@ -174,7 +174,7 @@ export default function AdminManagementPage() {
           ...sheetData.map(row => String(row[key as keyof typeof row] || '').length)
         );
       });
-      worksheet['!cols'] = maxWidths.map(w => ({ w: w + 2 }));
+      worksheet['!cols'] = maxWidths.map(w => ({ wch: w + 2 }));
 
       XLSX.utils.book_append_sheet(workbook, worksheet, domain.replace('-', ' ').toUpperCase().slice(0, 31));
     });
