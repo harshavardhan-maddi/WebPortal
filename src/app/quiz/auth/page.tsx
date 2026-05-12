@@ -140,11 +140,13 @@ export default function StudentLoginPage() {
             localStorage.setItem("student_session", JSON.stringify({
               email: formData.email,
               domain: formData.domain,
+              batch: formData.batch, // Include batch in fallback session
               rollNumber: emailPart,
               name: emailPart,
               token: Math.random().toString(36).substring(7),
             }));
             router.push(`/quiz/${formData.domain}/dashboard`);
+
           }
         } else {
           setError("Use correct credentials to attempt the test.");
