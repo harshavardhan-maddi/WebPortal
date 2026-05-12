@@ -236,7 +236,7 @@ export default function QuizCreationPage() {
 
     setIsUploading(true);
     try {
-      const targetDomains = quizData.isAllDomains ? ["all"] : quizData.domains;
+      const targetDomains = quizData.batch === "4th Year Super 50" ? ["all"] : (quizData.isAllDomains ? ["all"] : quizData.domains);
       const inserts = targetDomains.map(dom => ({
         title: quizData.title,
         domain: dom,

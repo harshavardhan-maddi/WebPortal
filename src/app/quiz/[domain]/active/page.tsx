@@ -151,6 +151,7 @@ export default function ActiveQuizPage() {
         .insert([{
           quiz_id: quizId,
           domain: domain,
+          batch: session.batch,
           roll_number: session.rollNumber,
           score: 0,
           correct: 0,
