@@ -42,13 +42,23 @@ export default function AdminControlCenter() {
   const downloadReport = async () => {
     setIsExporting(true);
     try {
-      const { data: results, error } = await supabase
+      // Fetch students first to validate null-batch results
+      const { data: students } = await supabase.from('students').select('roll_number').eq('batch', session?.batch || '3rd Year Super 50');
+      const studentRolls = new Set(students?.map(s => s.roll_number) || []);
+
+      const { data: allResults, error } = await supabase
         .from('results')
         .select('*, quizzes(title, date)')
-        .eq('batch', session?.batch || '3rd Year Super 50')
+        .or(`batch.eq.${session?.batch || '3rd Year Super 50'},batch.is.null`)
         .order('timestamp', { ascending: false });
 
       if (error) throw error;
+      
+      const results = (allResults || []).filter(r => {
+        if (r.batch === (session?.batch || '3rd Year Super 50')) return true;
+        if (!r.batch) return studentRolls.has(r.roll_number);
+        return false;
+      });
       if (!results || results.length === 0) {
         alert("No results found for the current batch.");
         setIsExporting(false);

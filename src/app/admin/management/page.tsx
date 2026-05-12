@@ -110,10 +110,17 @@ export default function AdminManagementPage() {
     const { data: qData } = await quizzesQuery;
     setQuizzes(qData || []);
 
-    let resultsQuery = supabase.from('results').select('*, quizzes(title, date)').eq('batch', batch).order('timestamp', { ascending: false });
+    let resultsQuery = supabase.from('results').select('*, quizzes(title, date)').or(`batch.eq.${batch},batch.is.null`).order('timestamp', { ascending: false });
     if (domainFilter && batch === "3rd Year Super 50") resultsQuery = resultsQuery.eq('domain', domainFilter);
     const { data: rData } = await resultsQuery;
-    setResults(rData || []);
+    
+    // Filter out null-batch results that don't belong to any student in the current batch list
+    const validatedResults = (rData || []).filter(r => {
+      if (r.batch === batch) return true;
+      if (!r.batch) return (sData || []).some(s => s.roll_number === r.roll_number);
+      return false;
+    });
+    setResults(validatedResults);
 
   };
 
