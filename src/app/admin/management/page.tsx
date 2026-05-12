@@ -47,6 +47,7 @@ export default function AdminManagementPage() {
   const [results, setResults] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any>(null);
+  const [selectedQuizForPreview, setSelectedQuizForPreview] = useState<any>(null);
   const [selectedQuizForGrades, setSelectedQuizForGrades] = useState<string | null>(null);
   const [newRollNumber, setNewRollNumber] = useState("");
   const [newStudentDomain, setNewStudentDomain] = useState("cyber-security");
@@ -418,21 +419,34 @@ export default function AdminManagementPage() {
           {activeTab === "quizzes" && (
             <motion.div key="quizzes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4">
                {filteredQuizzes.map((q) => (
-                  <div key={q.id} className="glass p-6 rounded-3xl border border-white/5 flex items-center justify-between group">
+                  <div 
+                    key={q.id} 
+                    onClick={() => setSelectedQuizForPreview(q)}
+                    className="glass p-6 rounded-3xl border border-white/5 flex items-center justify-between group cursor-pointer hover:border-primary/30 transition-all"
+                  >
                     <div className="flex items-center gap-4">
-                      <Calendar className="w-6 h-6 text-purple-400" />
+                      <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400">
+                        <FileText className="w-6 h-6" />
+                      </div>
                       <div>
-                        <p className="font-bold">{q.title}</p>
+                        <p className="font-bold text-lg">{q.title}</p>
                         <div className="flex items-center gap-4 mt-1">
                           <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> {q.time} - {q.end_time || '23:59'}</p>
                           <p className="text-[10px] uppercase font-black text-primary tracking-tighter">
                             {q.domain === 'all' ? 'All Domains' : q.domain.replace('-', ' ')}
                           </p>
-
                         </div>
                       </div>
                     </div>
-                    <Button variant="ghost" onClick={() => deleteQuiz(q.id)} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-5 h-5" /></Button>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right mr-4 hidden sm:block">
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Questions</p>
+                        <p className="font-black text-primary">{q.questions?.length || 0}</p>
+                      </div>
+                      <Button variant="ghost" onClick={(e) => { e.stopPropagation(); deleteQuiz(q.id); }} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/10 rounded-xl">
+                        <Trash2 className="w-5 h-5" />
+                      </Button>
+                    </div>
                   </div>
                ))}
             </motion.div>
@@ -487,25 +501,45 @@ export default function AdminManagementPage() {
           )}
         </AnimatePresence>
 
-        {/* Add Student Modal */}
+        {/* Quiz Preview Modal */}
         <AnimatePresence>
-          {isAddModalOpen && (
+          {selectedQuizForPreview && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAddModalOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="relative w-full max-w-md glass p-10 rounded-[2.5rem] border border-white/10 shadow-2xl">
-                <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center text-primary mx-auto mb-4"><UserPlus className="w-8 h-8" /></div>
-                  <h3 className="text-2xl font-bold">Add Student</h3>
-                </div>
-                <div className="space-y-6">
-                  <div className="space-y-2"><Label>Roll Number</Label><Input placeholder="e.g. 24471A4652" value={newRollNumber} onChange={(e) => setNewRollNumber(e.target.value)} className="h-12 bg-white/5 border-white/10 rounded-xl" /></div>
-                  <div className="space-y-2">
-                    <Label>Assign Domain</Label>
-                    <select className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm outline-none" disabled={adminSession?.role === "domain-admin"} value={adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain} onChange={(e) => setNewStudentDomain(e.target.value)}>
-                      {availableDomains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                    </select>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedQuizForPreview(null)} className="absolute inset-0 bg-black/90 backdrop-blur-md" />
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="relative w-full max-w-4xl max-h-[85vh] glass rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden flex flex-col">
+                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/5">
+                  <div>
+                    <h2 className="text-3xl font-black">{selectedQuizForPreview.title}</h2>
+                    <p className="text-sm text-muted-foreground mt-1 uppercase font-bold tracking-widest">{selectedQuizForPreview.domain} | {selectedQuizForPreview.questions?.length || 0} Questions</p>
                   </div>
-                  <div className="flex gap-3 pt-4"><Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="flex-1 h-12 rounded-xl">Cancel</Button><Button onClick={handleAddStudent} className="flex-1 h-12 rounded-xl font-bold">Create Account</Button></div>
+                  <Button variant="ghost" onClick={() => setSelectedQuizForPreview(null)} className="rounded-full w-12 h-12 p-0 hover:bg-white/10">✕</Button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-8 space-y-8 premium-scroll">
+                  {selectedQuizForPreview.questions?.map((q: any, idx: number) => (
+                    <div key={idx} className="space-y-4 p-6 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="flex gap-4">
+                        <span className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0">{idx + 1}</span>
+                        <h3 className="text-lg font-medium">{q.text}</h3>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-12">
+                        {q.options.map((opt: any, oIdx: number) => (
+                          <div 
+                            key={oIdx} 
+                            className={`p-4 rounded-xl border text-sm flex items-center justify-between ${
+                              q.correctAnswer === oIdx 
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                                : 'bg-white/5 border-white/5 text-muted-foreground'
+                            }`}
+                          >
+                            <span>{typeof opt === 'string' ? opt : opt.text}</span>
+                            {q.correctAnswer === oIdx && <CheckCircle className="w-4 h-4" />}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </motion.div>
             </div>
