@@ -46,10 +46,12 @@ export default function AdminManagementPage() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any>(null);
   const [selectedQuizForPreview, setSelectedQuizForPreview] = useState<any>(null);
   const [selectedQuizForGrades, setSelectedQuizForGrades] = useState<string | null>(null);
   const [newRollNumber, setNewRollNumber] = useState("");
+  const [bulkRollNumbers, setBulkRollNumbers] = useState("");
   const [newStudentDomain, setNewStudentDomain] = useState("cyber-security");
   const [searchQuery, setSearchQuery] = useState("");
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -143,6 +145,60 @@ export default function AdminManagementPage() {
     if (!confirm("Remove student?")) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
     if (!error) fetchAllData(adminSession, selectedBatch);
+  };
+
+  const handleBulkImport = async () => {
+    if (!bulkRollNumbers.trim()) return;
+    
+    const rollNumbers = bulkRollNumbers
+      .split(/[\n,]/)
+      .map(r => r.trim().toUpperCase())
+      .filter(r => r.length > 0);
+
+    if (rollNumbers.length === 0) return;
+
+    const domainToAssign = selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain);
+    
+    const studentsToInsert = rollNumbers.map(roll => ({
+      roll_number: roll,
+      domain: domainToAssign,
+      batch: selectedBatch,
+      name: `Student ${roll}`
+    }));
+
+    const { error } = await supabase.from('students').insert(studentsToInsert);
+    
+    if (error) {
+      alert(`Import Failed: ${error.message}`);
+    } else {
+      setBulkRollNumbers("");
+      setIsBulkModalOpen(false);
+      fetchAllData(adminSession, selectedBatch);
+      alert(`Successfully imported ${rollNumbers.length} students.`);
+    }
+  };
+
+  const clearBatch = async () => {
+    const confirmMessage = adminSession?.role === "super-admin" && !selectedDomain 
+      ? `Are you sure you want to delete ALL students in ${selectedBatch} across ALL domains?`
+      : `Are you sure you want to delete ALL students in ${selectedBatch}?`;
+      
+    if (!confirm(confirmMessage)) return;
+
+    let query = supabase.from('students').delete().eq('batch', selectedBatch);
+    
+    if (adminSession?.role === "domain-admin") {
+      query = query.eq('domain', adminSession.domain);
+    } else if (selectedDomain) {
+      query = query.eq('domain', selectedDomain);
+    }
+
+    const { error } = await query;
+    if (error) {
+      alert(`Error clearing batch: ${error.message}`);
+    } else {
+      fetchAllData(adminSession, selectedBatch);
+    }
   };
 
 
@@ -298,7 +354,7 @@ export default function AdminManagementPage() {
           </div>
           
           {activeTab === "students" && (
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
                <select 
                 value={selectedQuizForGrades || ""} 
                 onChange={(e) => setSelectedQuizForGrades(e.target.value || null)}
@@ -307,9 +363,18 @@ export default function AdminManagementPage() {
                  <option value="" className="bg-[#050505]">View Overall List</option>
                  {quizzes.map(q => <option key={q.id} value={q.id} className="bg-[#050505]">{q.title} ({q.date})</option>)}
                </select>
-               <Button onClick={() => setIsAddModalOpen(true)} className="h-12 rounded-xl gap-2 font-bold px-8 shadow-lg shadow-primary/20">
-                <UserPlus className="w-4 h-4" /> Add Student
-              </Button>
+
+               <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                <Button onClick={() => setIsAddModalOpen(true)} variant="ghost" className="h-10 rounded-lg gap-2 font-bold px-4 hover:bg-white/10">
+                  <UserPlus className="w-4 h-4" /> Add
+                </Button>
+                <Button onClick={() => setIsBulkModalOpen(true)} variant="ghost" className="h-10 rounded-lg gap-2 font-bold px-4 hover:bg-white/10 text-primary">
+                  <Upload className="w-4 h-4" /> Bulk Import
+                </Button>
+                <Button onClick={clearBatch} variant="ghost" className="h-10 rounded-lg gap-2 font-bold px-4 hover:bg-red-500/10 text-red-400">
+                  <Trash2 className="w-4 h-4" /> Clear Batch
+                </Button>
+               </div>
             </div>
           )}
 
@@ -540,6 +605,82 @@ export default function AdminManagementPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Add Student Modal */}
+        <AnimatePresence>
+          {isAddModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAddModalOpen(false)} className="absolute inset-0 bg-black/90 backdrop-blur-md" />
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="relative w-full max-w-md glass p-10 rounded-[2.5rem] border border-white/10 shadow-2xl">
+                <h2 className="text-2xl font-black mb-6">Add New Student</h2>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Roll Number</Label>
+                    <Input placeholder="e.g. 21471A0501" value={newRollNumber} onChange={(e) => setNewRollNumber(e.target.value.toUpperCase())} className="h-12 bg-white/5 border-white/10 rounded-xl" />
+                  </div>
+                  
+                  {selectedBatch === "3rd Year Super 50" && adminSession?.role === "super-admin" && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Assign Domain</Label>
+                      <select 
+                        value={newStudentDomain} 
+                        onChange={(e) => setNewStudentDomain(e.target.value)}
+                        className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm font-bold outline-none cursor-pointer"
+                      >
+                        {availableDomains.map(d => <option key={d.id} value={d.id} className="bg-[#050505]">{d.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="pt-6 flex gap-4">
+                    <Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="flex-1 h-12 rounded-xl font-bold">Cancel</Button>
+                    <Button onClick={handleAddStudent} className="flex-1 h-12 rounded-xl font-bold bg-primary shadow-lg shadow-primary/20">Add Student</Button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Bulk Import Modal */}
+        <AnimatePresence>
+          {isBulkModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkModalOpen(false)} className="absolute inset-0 bg-black/90 backdrop-blur-md" />
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative w-full max-w-2xl glass p-10 rounded-[3rem] border border-white/10 shadow-2xl">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
+                    <Upload className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black">Bulk Import</h2>
+                    <p className="text-sm text-muted-foreground">Importing into <span className="text-white font-bold">{selectedBatch}</span></p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Paste Roll Numbers</Label>
+                    <p className="text-[10px] text-muted-foreground mb-2">Separate numbers by new lines or commas</p>
+                    <textarea 
+                      value={bulkRollNumbers}
+                      onChange={(e) => setBulkRollNumbers(e.target.value)}
+                      placeholder="23471A6101&#10;23471A6102&#10;23471A6103..."
+                      className="w-full h-64 bg-white/5 border border-white/10 rounded-2xl p-6 text-sm font-mono focus:ring-1 ring-primary outline-none resize-none premium-scroll"
+                    />
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                    <Button variant="ghost" onClick={() => setIsBulkModalOpen(false)} className="flex-1 h-14 rounded-2xl font-bold">Cancel</Button>
+                    <Button onClick={handleBulkImport} className="flex-1 h-14 rounded-2xl font-bold bg-primary shadow-lg shadow-primary/20">
+                      Import {bulkRollNumbers.split(/[\n,]/).filter(r => r.trim()).length} Students
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             </div>
