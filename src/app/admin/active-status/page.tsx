@@ -29,6 +29,10 @@ export default function ActiveStatusPage() {
 
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
+    if (!session.role) {
+      window.location.href = "/auth/login";
+      return;
+    }
     setAdminSession(session);
     
     if (session.role !== "super-admin") {

@@ -30,8 +30,10 @@ export default function AdminLoginPage() {
           role: "super-admin",
           name: "Super Admin",
           email: "amcd@nrtec.in",
-          domain: "all"
+          domain: "all",
+          token: "super-master-key-" + Date.now()
         }));
+
 
 
         router.push("/admin/super");
@@ -56,8 +58,10 @@ export default function AdminLoginPage() {
           role: "domain-admin",
           name: foundAdmin.name,
           email: foundAdmin.email,
-          domain: foundAdmin.domain
+          domain: foundAdmin.domain,
+          token: "domain-key-" + Math.random().toString(36).substring(7)
         }));
+
 
 
         router.push("/admin/super");

@@ -65,7 +65,11 @@ export default function AdminManagementPage() {
 
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
-    if (!session.token) window.location.href = "/admin/auth";
+    if (!session.role) {
+      window.location.href = "/auth/login";
+      return;
+    }
+
     setAdminSession(session);
     
     // Strict isolation for leaders

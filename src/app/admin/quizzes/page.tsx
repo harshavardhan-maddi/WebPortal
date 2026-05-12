@@ -12,7 +12,8 @@ import {
   FileText,
   AlertCircle,
   ChevronLeft,
-  Timer
+  Timer,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,10 +40,18 @@ export default function QuizCreationPage() {
     file: null as File | null,
   });
 
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [source, setSource] = useState<"pdf" | "manual" | null>(null);
+
+
   const [adminSession, setAdminSession] = useState<any>(null);
 
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem("admin_session") || "{}");
+    if (!session.role) {
+      window.location.href = "/auth/login";
+      return;
+    }
     setAdminSession(session);
     
     const initialBatch = session.role === "super-admin" ? "3rd Year Super 50" : (session.batch || "3rd Year Super 50");
@@ -185,72 +194,47 @@ export default function QuizCreationPage() {
     setStep(step + 1);
   };
 
-  const handleGenerate = async () => {
-    if (!quizData.file) return;
-    
-    setIsUploading(true);
-    try {
-      const questions = await processFile(quizData.file);
-      
-      // Determine which domains to save
-      const targetDomains = quizData.isAllDomains 
-        ? ["all"] 
-        : quizData.domains;
-
-      const inserts = targetDomains.map(dom => ({
-        title: quizData.title,
-        domain: dom,
-        batch: quizData.batch, // Include batch in insertion
-        date: quizData.date,
-
-        time: quizData.time,
-        end_time: quizData.endTime,
-        questions: questions
-      }));
-
-      const { error } = await supabase
-        .from('quizzes')
-        .insert(inserts);
-
-
-      if (error) {
-        throw new Error(`Supabase Error: ${error.message}`);
-      }
-      
-      setStep(3);
-    } catch (error: any) {
-      alert(`AI Analysis or Save failed: ${error.message}`);
-    } finally {
-      setIsUploading(false);
-    }
+  const addManualQuestion = () => {
+    setQuestions([...questions, {
+      text: "",
+      options: ["", "", "", ""],
+      correctAnswer: 0
+    }]);
   };
+
+  const updateQuestion = (index: number, field: string, value: any) => {
+    const updated = [...questions];
+    if (field === "option") {
+      updated[index].options[value.optIndex] = value.text;
+    } else {
+      updated[index][field] = value;
+    }
+    setQuestions(updated);
+  };
+
+  const removeQuestion = (index: number) => setQuestions(questions.filter((_, i) => i !== index));
+  const addManualQuestion = () => setQuestions([...questions, { text: "", options: ["", "", "", ""], correctAnswer: 0 }]);
+  const nextStep = () => { if (step === 1 && (!quizData.title || !quizData.date || !quizData.time || !quizData.endTime)) return alert("Fill all details."); setStep(step + 1); };
 
   return (
     <div className="max-w-4xl mx-auto py-10">
       <div className="flex items-center gap-4 mb-10">
-        <button onClick={() => window.location.href = "/admin/super"} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-          <ChevronLeft className="w-6 h-6" />
-        </button>
+        <button onClick={() => window.location.href = "/admin/super"} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"><ChevronLeft className="w-6 h-6" /></button>
         <h1 className="text-4xl font-black tracking-tight">Quiz Engine</h1>
       </div>
 
-      {/* Progress Stepper */}
       <div className="flex items-center justify-between mb-12 px-6">
-        {[1, 2, 3].map((num) => (
+        {[1, 2, 3, 4].map((num) => (
           <div key={num} className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-all ${
-              step >= num ? 'bg-primary text-white shadow-lg shadow-primary/20 scale-110' : 'bg-white/5 text-muted-foreground'
-            }`}>
-              {num < step ? <CheckCircle2 className="w-5 h-5" /> : num}
-            </div>
-            {num < 3 && <div className={`h-1 w-20 rounded-full ${step > num ? 'bg-primary' : 'bg-white/5'}`} />}
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${step >= num ? 'bg-primary text-white' : 'bg-white/5 text-muted-foreground'}`}>{num < step ? <CheckCircle2 className="w-5 h-5" /> : num}</div>
+            {num < 4 && <div className={`h-1 w-16 rounded-full ${step > num ? 'bg-primary' : 'bg-white/5'}`} />}
           </div>
         ))}
       </div>
 
       <AnimatePresence mode="wait">
         {step === 1 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass p-10 rounded-[3rem] border border-white/5 space-y-8">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="glass p-10 rounded-[3rem] border border-white/5 space-y-8">
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
                 <Label>Target Batch</Label>
@@ -277,15 +261,20 @@ export default function QuizCreationPage() {
 
               <div className="space-y-2">
                 <Label>Quiz Title</Label>
-                <Input placeholder="e.g. Final Assessment" value={quizData.title} onChange={(e) => setQuizData({...quizData, title: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl text-lg" />
+                <Input placeholder="e.g. Mid-term Assessment" value={quizData.title} onChange={(e) => setQuizData({...quizData, title: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl text-lg font-bold" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-8">
-              {quizData.batch === "3rd Year Super 50" ? (
-                <div className="space-y-2">
-                  <Label>Assigned Domains</Label>
-                  {adminSession?.role === "domain-admin" ? (
+              <div className="space-y-2">
+                <Label>Execution Date</Label>
+                <Input type="date" value={quizData.date} onChange={(e) => setQuizData({...quizData, date: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl" />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Assigned Domains</Label>
+                {quizData.batch === "3rd Year Super 50" ? (
+                  adminSession?.role === "domain-admin" ? (
                     <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-primary capitalize">
                       {quizData.domain.replace('-', ' ')}
                     </div>
@@ -301,10 +290,10 @@ export default function QuizCreationPage() {
                       {!quizData.isAllDomains && (
                         <div className="grid grid-cols-2 gap-3">
                           {[
-                            { id: "cyber-security", name: "Cyber Security" },
-                            { id: "fsd", name: "Full Stack Development" },
-                            { id: "aiml", name: "AI & ML" },
-                            { id: "data-science", name: "Data Science" },
+                            { id: "cyber-security", name: "Cyber" },
+                            { id: "fsd", name: "FSD" },
+                            { id: "aiml", name: "AI/ML" },
+                            { id: "data-science", name: "Data" },
                           ].map((dom) => (
                             <div 
                               key={dom.id}
@@ -318,87 +307,86 @@ export default function QuizCreationPage() {
                                 quizData.domains.includes(dom.id) ? 'bg-primary/10 border-primary text-primary' : 'bg-white/5 border-white/10 text-muted-foreground'
                               }`}
                             >
-                              <div className={`w-4 h-4 rounded border flex items-center justify-center ${quizData.domains.includes(dom.id) ? 'bg-primary border-primary' : 'border-white/20'}`}>
-                                {quizData.domains.includes(dom.id) && <CheckCircle2 className="w-2.5 h-2.5 text-white" />}
-                              </div>
                               <span className="text-xs font-bold">{dom.name}</span>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label>Assigned Domains</Label>
+                  )
+                ) : (
                   <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-muted-foreground italic">
-                    General Access (No Domains)
+                    General Access
                   </div>
-                </div>
-              )}
-              
-              <div className="space-y-2">
-                <Label>Execution Date</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input type="date" value={quizData.date} onChange={(e) => setQuizData({...quizData, date: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
-                </div>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
                 <Label>Starting Time</Label>
-                <div className="relative">
-                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input type="time" value={quizData.time} onChange={(e) => setQuizData({...quizData, time: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
-                </div>
+                <Input type="time" value={quizData.time} onChange={(e) => setQuizData({...quizData, time: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl" />
               </div>
               <div className="space-y-2">
-                <Label>Closing Time (Auto-Delete)</Label>
-                <div className="relative">
-                  <Timer className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400" />
-                  <Input type="time" value={quizData.endTime} onChange={(e) => setQuizData({...quizData, endTime: e.target.value})} className="h-14 pl-12 bg-white/5 border-white/10 rounded-2xl" />
-                </div>
+                <Label>Closing Time</Label>
+                <Input type="time" value={quizData.endTime} onChange={(e) => setQuizData({...quizData, endTime: e.target.value})} className="h-14 bg-white/5 border-white/10 rounded-2xl border-red-500/20" />
               </div>
             </div>
-            <Button onClick={nextStep} className="w-full h-14 rounded-2xl text-lg font-bold">Configure Questions <ArrowRight className="ml-2 w-5 h-5" /></Button>
+
+            <Button onClick={nextStep} className="w-full h-14 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20">
+              Continue to Questions <ArrowRight className="ml-2 w-5 h-5" />
+            </Button>
           </motion.div>
         )}
 
+
         {step === 2 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass p-10 rounded-[3rem] border border-white/5 text-center">
-            <div className="mb-10">
-              <div className="w-20 h-20 bg-primary/20 rounded-[2rem] flex items-center justify-center text-primary mx-auto mb-6 shadow-xl"><FileUp className="w-10 h-10" /></div>
-              <h3 className="text-3xl font-black tracking-tight">Upload Question Bank</h3>
-              <p className="text-muted-foreground mt-2">Upload a text-based PDF. Our AI will automatically extract MCQs.</p>
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+            <div className="grid grid-cols-2 gap-6">
+              <button onClick={() => setSource("pdf")} className={`p-8 rounded-[2.5rem] border transition-all ${source === "pdf" ? 'bg-primary/10 border-primary' : 'bg-white/5 border-white/10'}`}>
+                <FileUp className="w-8 h-8 mb-4" />
+                <h3 className="font-bold">AI PDF Extraction</h3>
+              </button>
+              <button onClick={() => { setSource("manual"); setQuestions([{ text: "", options: ["", "", "", ""], correctAnswer: 0 }]); setStep(3); }} className="p-8 rounded-[2.5rem] border border-white/10 bg-white/5">
+                <Plus className="w-8 h-8 mb-4" />
+                <h3 className="font-bold">Manual Entry</h3>
+              </button>
             </div>
-            <div className="border-2 border-dashed border-white/10 rounded-[2.5rem] p-16 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer relative group">
-              <input type="file" accept=".pdf" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
-              <div className="space-y-4">
-                <FileText className="w-12 h-12 text-muted-foreground group-hover:text-primary mx-auto transition-colors" />
-                <p className="text-lg font-bold">{quizData.file ? quizData.file.name : "Drop PDF here or click to upload"}</p>
+            {source === "pdf" && (
+              <div className="glass p-10 rounded-[3rem] text-center border-dashed border-2 border-white/10">
+                <input type="file" onChange={(e) => e.target.files && setQuizData({...quizData, file: e.target.files[0]})} />
+                {quizData.file && <Button onClick={handleAIProcess} disabled={isUploading}>{isUploading ? "Processing..." : "Extract"}</Button>}
               </div>
-            </div>
-            <div className="mt-10 flex gap-4">
-              <Button variant="ghost" onClick={() => setStep(1)} className="flex-1 h-14 rounded-2xl font-bold">Back</Button>
-              <Button onClick={handleGenerate} disabled={!quizData.file || isUploading} className="flex-[2] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20">
-                {isUploading ? <div className="flex items-center gap-3"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Analyzing PDF...</div> : "Generate & Deploy Quiz"}
-              </Button>
-            </div>
+            )}
           </motion.div>
         )}
 
         {step === 3 && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass p-12 rounded-[3.5rem] border border-white/5 text-center">
-            <div className="w-24 h-24 bg-emerald-500/20 rounded-[2.5rem] flex items-center justify-center text-emerald-400 mx-auto mb-8 shadow-[0_0_50px_rgba(16,185,129,0.3)]"><CheckCircle2 className="w-12 h-12" /></div>
-            <h2 className="text-4xl font-black mb-4">Quiz Deployed!</h2>
-            <p className="text-xl text-muted-foreground max-w-lg mx-auto mb-10">Your assessment is now live and scheduled. It will be automatically hidden from students after {quizData.endTime}.</p>
-            <div className="flex gap-4 max-w-md mx-auto">
-              <Button onClick={() => window.location.href = "/admin/management"} className="flex-1 h-14 rounded-2xl font-bold">Go to Management</Button>
-              <Button variant="glass" onClick={() => window.location.reload()} className="flex-1 h-14 rounded-2xl font-bold">Create Another</Button>
-            </div>
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+            {questions.map((q, qIndex) => (
+              <div key={qIndex} className="glass p-8 rounded-[2rem] border border-white/5 space-y-4">
+                <textarea value={q.text} onChange={(e) => updateQuestion(qIndex, "text", e.target.value)} className="w-full bg-white/5 p-4 rounded-xl" />
+                <div className="grid grid-cols-2 gap-4">
+                  {q.options.map((opt: string, oIndex: number) => (
+                    <div key={oIndex} className="flex gap-2">
+                      <Input value={opt} onChange={(e) => updateQuestion(qIndex, "option", { optIndex: oIndex, text: e.target.value })} />
+                      <button onClick={() => updateQuestion(qIndex, "correctAnswer", oIndex)} className={q.correctAnswer === oIndex ? "text-primary" : ""}>✓</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => removeQuestion(qIndex)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            ))}
+            <Button onClick={addManualQuestion} variant="glass" className="w-full"><Plus className="mr-2" /> Add Question</Button>
+            <Button onClick={handleFinalSave} disabled={isUploading} className="w-full h-14 rounded-2xl">{isUploading ? "Saving..." : "Deploy Quiz"}</Button>
+          </motion.div>
+        )}
+
+        {step === 4 && (
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-20">
+            <CheckCircle2 className="w-24 h-24 text-primary mx-auto mb-6" />
+            <h2 className="text-4xl font-black">Quiz Deployed!</h2>
+            <Button onClick={() => window.location.href = "/admin/management"} className="mt-8">Management Hub</Button>
           </motion.div>
         )}
       </AnimatePresence>

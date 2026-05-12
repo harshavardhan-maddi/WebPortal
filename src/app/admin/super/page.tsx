@@ -31,8 +31,13 @@ export default function AdminControlCenter() {
 
   React.useEffect(() => {
     const s = JSON.parse(localStorage.getItem("admin_session") || "{}");
+    if (!s.role) {
+      window.location.href = "/auth/login";
+      return;
+    }
     setSession(s);
   }, []);
+
 
   const downloadReport = async () => {
     setIsExporting(true);
