@@ -214,6 +214,49 @@ export default function QuizCreationPage() {
 
   const removeQuestion = (index: number) => setQuestions(questions.filter((_, i) => i !== index));
 
+  const handleAIProcess = async () => {
+    if (!quizData.file) return;
+    setIsUploading(true);
+    try {
+      const extractedQuestions = await processFile(quizData.file);
+      setQuestions(extractedQuestions);
+      setStep(3);
+    } catch (error: any) {
+      alert(`AI Extraction failed: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFinalSave = async () => {
+    if (questions.length === 0) {
+      alert("Please add at least one question.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const targetDomains = quizData.isAllDomains ? ["all"] : quizData.domains;
+      const inserts = targetDomains.map(dom => ({
+        title: quizData.title,
+        domain: dom,
+        batch: quizData.batch,
+        date: quizData.date,
+        time: quizData.time,
+        end_time: quizData.endTime,
+        questions: questions
+      }));
+
+      const { error } = await supabase.from('quizzes').insert(inserts);
+      if (error) throw error;
+      setStep(4);
+    } catch (error: any) {
+      alert(`Save failed: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-10">
       <div className="flex items-center gap-4 mb-10">
