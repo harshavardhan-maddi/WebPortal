@@ -88,9 +88,9 @@ export default function StudentLoginPage() {
       }
 
       if (student) {
-        // Simple password check (using roll number as password as per previous logic)
-        // In a real app, use Supabase Auth or proper hashing.
-        if (formData.password !== student.roll_number) {
+        // Check for custom password, fallback to roll number
+        const correctPassword = student.password || student.roll_number;
+        if (formData.password !== correctPassword) {
           setError("Use correct credentials to attempt the test.");
           setIsLoading(false);
           return;

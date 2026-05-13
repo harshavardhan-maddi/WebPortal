@@ -42,10 +42,11 @@ import { formatTime } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 
 export default function AdminManagementPage() {
-  const [activeTab, setActiveTab] = useState<"students" | "quizzes" | "results">("students");
+  const [activeTab, setActiveTab] = useState<"students" | "quizzes" | "results" | "requests">("students");
   const [students, setStudents] = useState<any[]>([]);
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
+  const [passwordRequests, setPasswordRequests] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any>(null);
@@ -89,12 +90,14 @@ export default function AdminManagementPage() {
     const resultsChannel = supabase.channel('results_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => fetchAllData(session, selectedBatch)).subscribe();
     const quizzesChannel = supabase.channel('quizzes_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => fetchAllData(session, selectedBatch)).subscribe();
     const studentsChannel = supabase.channel('students_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchAllData(session, selectedBatch)).subscribe();
+    const requestsChannel = supabase.channel('requests_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'password_requests' }, () => fetchAllData(session, selectedBatch)).subscribe();
 
 
     return () => {
       supabase.removeChannel(resultsChannel);
       supabase.removeChannel(quizzesChannel);
       supabase.removeChannel(studentsChannel);
+      supabase.removeChannel(requestsChannel);
     };
   }, []);
 
@@ -126,6 +129,11 @@ export default function AdminManagementPage() {
     
     const { data: rData } = await resultsQuery;
     setResults(rData || []);
+
+    let requestsQuery = supabase.from('password_requests').select('*').order('created_at', { ascending: false });
+    if (domainFilter && batch === "3rd Year Super 50") requestsQuery = requestsQuery.eq('domain', domainFilter);
+    const { data: prData } = await requestsQuery;
+    setPasswordRequests(prData || []);
 
   };
 
@@ -210,6 +218,58 @@ export default function AdminManagementPage() {
     fetchAllData(adminSession, selectedBatch);
   };
 
+  const deleteResult = async (id: string) => {
+    if (!confirm("Delete this result to allow a re-attempt? This cannot be undone.")) return;
+    const { error } = await supabase.from('results').delete().eq('id', id);
+    if (error) {
+      alert(`Error resetting result: ${error.message}`);
+    } else {
+      fetchAllData(adminSession, selectedBatch);
+    }
+  };
+
+  const handleAcceptPasswordRequest = async (request: any) => {
+    if (!confirm(`Accept password change for ${request.roll_number}?`)) return;
+
+    const { error: sError } = await supabase
+      .from('students')
+      .update({ password: request.new_password })
+      .eq('roll_number', request.roll_number);
+
+    if (sError) {
+      alert(`Error updating student password: ${sError.message}`);
+      return;
+    }
+
+    const { error: rError } = await supabase
+      .from('password_requests')
+      .update({ 
+        status: 'ACCEPTED', 
+        handled_at: new Date().toISOString(),
+        handled_by: adminSession?.name || adminSession?.role
+      })
+      .eq('id', request.id);
+
+    if (rError) alert(`Error updating request: ${rError.message}`);
+    else fetchAllData(adminSession, selectedBatch);
+  };
+
+  const handleRejectPasswordRequest = async (request: any) => {
+    if (!confirm(`Reject password change for ${request.roll_number}?`)) return;
+
+    const { error } = await supabase
+      .from('password_requests')
+      .update({ 
+        status: 'REJECTED', 
+        handled_at: new Date().toISOString(),
+        handled_by: adminSession?.name || adminSession?.role
+      })
+      .eq('id', request.id);
+
+    if (error) alert(`Error updating request: ${error.message}`);
+    else fetchAllData(adminSession, selectedBatch);
+  };
+
 
   const downloadExcel = (data: any[] = results) => {
     if (data.length === 0) {
@@ -277,6 +337,11 @@ export default function AdminManagementPage() {
     (selectedDomain && selectedBatch === "3rd Year Super 50" ? r.domain === selectedDomain : true)
   );
 
+  const filteredRequests = passwordRequests.filter(r => 
+    r.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    (selectedDomain && selectedBatch === "3rd Year Super 50" ? r.domain === selectedDomain : true)
+  );
+
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-8">
@@ -318,13 +383,13 @@ export default function AdminManagementPage() {
 
           
           <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-            {["students", "quizzes", "results"].map((tab) => (
+            {["students", "quizzes", "results", "requests"].map((tab) => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
                 className={`px-6 py-2 rounded-xl text-sm font-bold transition-all capitalize ${activeTab === tab ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'}`}
               >
-                {tab}
+                {tab === 'requests' ? 'Password Requests' : tab}
               </button>
             ))}
           </div>
@@ -536,9 +601,78 @@ export default function AdminManagementPage() {
                       <p className={`text-xl font-black ${res.score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{res.score}%</p>
                     </div>
                     <div className="md:col-span-2 text-right opacity-60"><p className="text-xs font-bold">{new Date(res.timestamp).toLocaleDateString()}</p></div>
-                    <div className="md:col-span-1 flex justify-end"><ExternalLink className="w-5 h-5 text-muted-foreground" /></div>
+                    <div className="md:col-span-1 flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); deleteResult(res.id); }}
+                        className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        title="Allow Re-attempt (Delete Result)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <ExternalLink className="w-5 h-5 text-muted-foreground" />
+                    </div>
                  </div>
                ))}
+            </motion.div>
+          )}
+
+          {activeTab === "requests" && (
+            <motion.div key="requests" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+               {filteredRequests.map((req) => (
+                 <div key={req.id} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all group">
+                    <div className="md:col-span-3 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 font-bold"><Lock className="w-5 h-5" /></div>
+                      <div>
+                        <p className="font-bold">{req.roll_number}</p>
+                        <p className="text-[10px] uppercase font-black text-muted-foreground">{req.domain.replace('-', ' ')}</p>
+                      </div>
+                    </div>
+                    <div className="md:col-span-4 border-l border-white/5 pl-6">
+                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">New Password</p>
+                      <p className="font-mono text-primary font-bold">{req.new_password}</p>
+                    </div>
+                    <div className="md:col-span-2 text-center">
+                      <p className="text-xs text-muted-foreground font-bold uppercase mb-1">Status</p>
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
+                        req.status === 'ACCEPTED' ? 'bg-emerald-500/20 text-emerald-400' : 
+                        req.status === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 
+                        'bg-orange-500/20 text-orange-400'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+                    <div className="md:col-span-3 flex justify-end gap-2">
+                      {req.status === 'PENDING' && (
+                        <>
+                          <Button 
+                            onClick={() => handleRejectPasswordRequest(req)}
+                            className="h-10 rounded-xl px-4 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all font-bold text-xs"
+                          >
+                            Reject
+                          </Button>
+                          <Button 
+                            onClick={() => handleAcceptPasswordRequest(req)}
+                            className="h-10 rounded-xl px-4 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all font-bold text-xs"
+                          >
+                            Accept
+                          </Button>
+                        </>
+                      )}
+                      {req.status !== 'PENDING' && (
+                        <p className="text-[10px] text-muted-foreground italic">
+                          Handled by {req.handled_by || 'Admin'}
+                        </p>
+                      )}
+                    </div>
+                 </div>
+               ))}
+               {filteredRequests.length === 0 && (
+                 <div className="glass p-12 rounded-[3rem] border border-white/5 text-center">
+                    <p className="text-muted-foreground font-bold italic">No password change requests found.</p>
+                 </div>
+               )}
             </motion.div>
           )}
         </AnimatePresence>

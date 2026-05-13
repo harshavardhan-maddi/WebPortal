@@ -11,7 +11,8 @@ import {
   PlayCircle, 
   ArrowRight,
   History,
-  Timer
+  Timer,
+  User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
@@ -144,6 +145,14 @@ export default function StudentDashboard() {
               <Calendar className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</span>
             </div>
+            <Button 
+              variant="glass" 
+              onClick={() => router.push(`/quiz/${domain}/profile`)}
+              className="rounded-xl border-white/5 gap-2 font-bold"
+            >
+              <User className="w-4 h-4 text-primary" />
+              Profile
+            </Button>
           </div>
         </div>
 
