@@ -12,7 +12,11 @@ import {
   ArrowRight,
   History,
   Timer,
-  User
+  User,
+  XCircle,
+  BarChart3,
+  ChevronRight,
+  TrendingUp
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
@@ -22,6 +26,7 @@ export default function StudentDashboard() {
   const router = useRouter();
   const [student, setStudent] = useState<any>(null);
   const [completedQuizzes, setCompletedQuizzes] = useState<string[]>([]);
+  const [allResults, setAllResults] = useState<any[]>([]);
   const [allQuizzes, setAllQuizzes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -89,25 +94,29 @@ export default function StudentDashboard() {
 
       const { data: results, error: rError } = await supabase
         .from('results')
-        .select('quiz_id')
+        .select('*')
         .eq('roll_number', studentData.rollNumber);
 
       if (rError) throw rError;
 
+      setAllResults(results || []);
       const completedIds = results?.map(r => r.quiz_id) || [];
       setCompletedQuizzes(completedIds);
 
       const todayStr = new Date().toISOString().split('T')[0];
       
-      // Filter out quizzes that are past their closing time
-      const processedQuizzes = (quizzes || []).filter((q: any) => {
-        const quizEndDate = new Date(`${q.date}T${q.end_time || '23:59:59'}`);
-        return quizEndDate > new Date(); // Only show if not expired
-      }).map((q: any) => ({
-        ...q,
-        isToday: q.date === todayStr,
-        duration: "30 Mins"
-      }));
+      const processedQuizzes = (quizzes || []).map((q: any) => {
+        const quizEndTime = new Date(`${q.date}T${q.end_time || '23:59:59'}`);
+        const result = (results || []).find(r => r.quiz_id === q.id);
+        
+        return {
+          ...q,
+          isToday: q.date === todayStr,
+          isExpired: quizEndTime < new Date(),
+          result: result || null,
+          duration: "30 Mins"
+        };
+      });
 
       setAllQuizzes(processedQuizzes);
       localStorage.setItem("global_quizzes", JSON.stringify(processedQuizzes));
@@ -156,13 +165,47 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        <div className="space-y-8">
-          <section className="space-y-4">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <PlayCircle className="w-5 h-5 text-primary" /> Today's Assessment
-            </h2>
+        <div className="space-y-12">
+          {/* Active Assessments Section */}
+          <section className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-black flex items-center gap-3">
+                  <PlayCircle className="w-6 h-6 text-primary" /> Active Assessments
+                </h2>
+                <div className="px-4 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-widest">
+                    Available Now
+                </div>
+            </div>
             <div className="grid gap-4">
-              {allQuizzes.filter(q => q.isToday).map((quiz) => (
+              {allQuizzes.filter(q => !q.isExpired && !completedQuizzes.includes(q.id)).map((quiz) => (
+                <QuizCard 
+                  key={quiz.id} 
+                  quiz={quiz} 
+                  currentTime={currentTime}
+                  isCompleted={false}
+                  onStart={() => handleStartQuiz(quiz.id)}
+                />
+              ))}
+              {allQuizzes.filter(q => !q.isExpired && !completedQuizzes.includes(q.id)).length === 0 && (
+                <div className="glass p-10 rounded-[2.5rem] border border-white/5 text-center text-muted-foreground font-medium italic">
+                  No active assessments at the moment.
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Performance & History Section */}
+          <section className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-black flex items-center gap-3 text-emerald-400">
+                  <TrendingUp className="w-6 h-6" /> Assessment History
+                </h2>
+                <div className="px-4 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/20 text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                    Performance Track
+                </div>
+            </div>
+            <div className="grid gap-4">
+              {allQuizzes.filter(q => completedQuizzes.includes(q.id) || q.isExpired).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((quiz) => (
                 <QuizCard 
                   key={quiz.id} 
                   quiz={quiz} 
@@ -171,32 +214,8 @@ export default function StudentDashboard() {
                   onStart={() => handleStartQuiz(quiz.id)}
                 />
               ))}
-              {allQuizzes.filter(q => q.isToday).length === 0 && (
-                <div className="glass p-10 rounded-[2rem] border border-white/5 text-center text-muted-foreground">
-                  No assessments scheduled for today.
-                </div>
-              )}
             </div>
           </section>
-
-          {allQuizzes.filter(q => !q.isToday).length > 0 && (
-            <section className="space-y-4">
-              <h2 className="text-xl font-bold flex items-center gap-2 text-muted-foreground">
-                <History className="w-5 h-5" /> Upcoming Assessments
-              </h2>
-              <div className="grid gap-4">
-                {allQuizzes.filter(q => !q.isToday).map((quiz) => (
-                  <QuizCard 
-                    key={quiz.id} 
-                    quiz={quiz} 
-                    currentTime={currentTime}
-                    isCompleted={completedQuizzes.includes(quiz.id)}
-                    onStart={() => handleStartQuiz(quiz.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
         </div>
       </div>
     </div>
@@ -205,7 +224,10 @@ export default function StudentDashboard() {
 
 function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCompleted: boolean, onStart: () => void, currentTime: Date }) {
   const quizStartTime = new Date(`${quiz.date}T${quiz.time}`);
+  const quizEndTime = new Date(`${quiz.date}T${quiz.end_time || '23:59:59'}`);
   const isLocked = currentTime < quizStartTime;
+  const isExpired = currentTime > quizEndTime;
+  const result = quiz.result;
   
   // Calculate countdown
   const diff = quizStartTime.getTime() - currentTime.getTime();
@@ -215,47 +237,70 @@ function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCo
 
   return (
     <motion.div
-      whileHover={!isCompleted && !isLocked ? { y: -5 } : {}}
-      className={`glass p-6 rounded-[2rem] border transition-all ${
-        isCompleted ? 'border-white/5 opacity-80' : isLocked ? 'border-white/5' : 'border-white/10 hover:border-primary/40'
+      whileHover={!isCompleted && !isLocked && !isExpired ? { y: -5 } : {}}
+      className={`glass p-6 rounded-[2.5rem] border transition-all ${
+        isCompleted ? 'border-emerald-500/20 bg-emerald-500/5' : 
+        isExpired ? 'border-red-500/10 bg-red-500/5 opacity-80' :
+        isLocked ? 'border-white/5' : 'border-white/10 hover:border-primary/40'
       }`}
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-6">
           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
-            isCompleted ? 'bg-emerald-500/10 text-emerald-500' : isLocked ? 'bg-white/5 text-muted-foreground' : 'bg-primary/10 text-primary'
+            isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 
+            isExpired ? 'bg-red-500/10 text-red-400' :
+            isLocked ? 'bg-white/5 text-muted-foreground' : 'bg-primary/10 text-primary'
           }`}>
-            {isCompleted ? <CheckCircle2 className="w-8 h-8" /> : isLocked ? <Lock className="w-8 h-8" /> : <Clock className="w-8 h-8" />}
+            {isCompleted ? <CheckCircle2 className="w-8 h-8" /> : 
+             isExpired ? <XCircle className="w-8 h-8" /> :
+             isLocked ? <Lock className="w-8 h-8" /> : <Clock className="w-8 h-8" />}
           </div>
           <div>
-            <h3 className="text-xl font-bold">{quiz.title}</h3>
-            <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {quiz.date}</span>
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {quiz.time} - {quiz.end_time || '23:59'}</span>
-              <span className="flex items-center gap-1">
-                {Array.isArray(quiz.questions) ? quiz.questions.length : "Multi"} Questions
+            <h3 className="text-xl font-black tracking-tight">{quiz.title}</h3>
+            <div className="flex items-center gap-4 mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3 text-primary" /> {quiz.date}</span>
+              <span className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-primary" /> {quiz.time} - {quiz.end_time || '23:59'}</span>
+              <span className="flex items-center gap-1.5 text-primary">
+                 {quiz.questions?.length || 0} Questions
               </span>
             </div>
           </div>
         </div>
 
-        <div>
+        <div className="flex items-center gap-6">
           {isCompleted ? (
-            <div className="flex items-center gap-3 px-6 py-3 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-bold uppercase tracking-widest text-xs">
-              <CheckCircle2 className="w-4 h-4" /> Completed
+            <div className="flex items-center gap-8">
+                <div className="text-right">
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Score Result</p>
+                    <p className="text-2xl font-black text-emerald-400">
+                        {result.correct}/{result.total}
+                    </p>
+                </div>
+                <div className="h-10 w-[1px] bg-white/10" />
+                <div className="text-right">
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Percentage</p>
+                    <p className="text-2xl font-black text-primary">
+                        {result.score}%
+                    </p>
+                </div>
+            </div>
+          ) : isExpired ? (
+            <div className="text-right">
+                <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Status</p>
+                <p className="text-lg font-black text-muted-foreground italic">Not Attempted</p>
             </div>
           ) : isLocked ? (
             <div className="flex flex-col items-end gap-1">
-              <div className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 text-muted-foreground border border-white/10 font-bold text-xs">
+              <div className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 text-muted-foreground border border-white/10 font-black text-[10px] uppercase tracking-widest">
                 <Timer className="w-4 h-4" /> Starts in {hours > 0 ? `${hours}h ` : ""}{mins}m {secs}s
               </div>
             </div>
           ) : (
             <Button 
               onClick={onStart}
-              className="rounded-full px-8 h-12 font-bold flex items-center gap-2 group"
+              className="rounded-full px-8 h-12 font-black text-xs uppercase tracking-widest flex items-center gap-2 group bg-primary shadow-lg shadow-primary/20"
             >
-              Start Assessment <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              Start Now <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Button>
           )}
         </div>
