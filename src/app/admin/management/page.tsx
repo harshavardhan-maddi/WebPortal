@@ -34,7 +34,8 @@ import {
   MoreVertical,
   ChevronDown,
   Upload,
-  Lock
+  Lock,
+  RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -227,6 +228,28 @@ export default function AdminManagementPage() {
     } else {
       fetchAllData(adminSession, selectedBatch);
     }
+  };
+  
+  const deleteResultByRollAndQuiz = async (rollNumber: string, quizId: string) => {
+    if (!confirm(`Reset attempt for ${rollNumber}? This will delete their current score.`)) return;
+    
+    // Safety check for domain leaders
+    if (adminSession?.role === "domain-admin") {
+      const student = students.find(s => s.roll_number === rollNumber);
+      if (student && student.domain !== adminSession.domain) {
+        alert("You can only reset attempts for students in your domain.");
+        return;
+      }
+    }
+
+    const { error } = await supabase
+      .from('results')
+      .delete()
+      .eq('roll_number', rollNumber)
+      .eq('quiz_id', quizId);
+
+    if (error) alert(`Error resetting: ${error.message}`);
+    else fetchAllData(adminSession, selectedBatch);
   };
 
   const handleAcceptPasswordRequest = async (request: any) => {
@@ -497,10 +520,20 @@ export default function AdminManagementPage() {
                               
                               <div className="flex items-center gap-4 relative z-10">
                                 {score !== null && (
-                                  <div className="text-right">
-                                    <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                    <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                                  </div>
+                                  <>
+                                    <div className="text-right">
+                                      <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                      <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                                    </div>
+                                    <Button 
+                                      variant="ghost" 
+                                      onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
+                                      className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
+                                      title="Reset Attempt"
+                                    >
+                                      <RotateCcw className="w-5 h-5" />
+                                    </Button>
+                                  </>
                                 )}
                                 <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
                                   <Trash2 className="w-4 h-4" />
@@ -530,10 +563,20 @@ export default function AdminManagementPage() {
                         </div>
                         <div className="flex items-center gap-4 relative z-10">
                           {score !== null && (
-                            <div className="text-right">
-                              <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                              <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                            </div>
+                            <>
+                              <div className="text-right">
+                                <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
+                                className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
+                                title="Reset Attempt"
+                              >
+                                <RotateCcw className="w-5 h-5" />
+                              </Button>
+                            </>
                           )}
                           <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
                             <Trash2 className="w-4 h-4" />
