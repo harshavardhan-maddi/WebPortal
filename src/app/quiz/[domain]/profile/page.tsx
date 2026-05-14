@@ -46,7 +46,7 @@ export default function StudentProfile() {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'password_requests',
+          table: 'pwd_requests',
           filter: `roll_number=eq.${studentData.rollNumber}`
         },
         (payload) => {
@@ -63,7 +63,7 @@ export default function StudentProfile() {
 
   const fetchLatestRequest = async (rollNumber: string) => {
     const { data, error } = await supabase
-      .from('password_requests')
+      .from('pwd_requests')
       .select('*')
       .eq('roll_number', rollNumber)
       .order('created_at', { ascending: false })
@@ -89,7 +89,7 @@ export default function StudentProfile() {
     setMessage(null);
 
     const { error } = await supabase
-      .from('password_requests')
+      .from('pwd_requests')
       .insert([{
         roll_number: student.rollNumber,
         new_password: newPassword,

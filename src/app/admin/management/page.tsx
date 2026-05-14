@@ -92,7 +92,7 @@ export default function AdminManagementPage() {
     const resultsChannel = supabase.channel('results_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => fetchAllData(session, selectedBatch)).subscribe();
     const quizzesChannel = supabase.channel('quizzes_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => fetchAllData(session, selectedBatch)).subscribe();
     const studentsChannel = supabase.channel('students_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchAllData(session, selectedBatch)).subscribe();
-    const requestsChannel = supabase.channel('requests_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'password_requests' }, () => fetchAllData(session, selectedBatch)).subscribe();
+    const requestsChannel = supabase.channel('requests_realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'pwd_requests' }, () => fetchAllData(session, selectedBatch)).subscribe();
 
 
     return () => {
@@ -132,7 +132,7 @@ export default function AdminManagementPage() {
     const { data: rData } = await resultsQuery;
     setResults(rData || []);
 
-    let requestsQuery = supabase.from('password_requests').select('*').order('created_at', { ascending: false });
+    let requestsQuery = supabase.from('pwd_requests').select('*').order('created_at', { ascending: false });
     if (domainFilter && batch === "3rd Year Super 50") requestsQuery = requestsQuery.eq('domain', domainFilter);
     const { data: prData } = await requestsQuery;
     setPasswordRequests(prData || []);
