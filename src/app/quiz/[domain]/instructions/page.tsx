@@ -49,7 +49,13 @@ export default function InstructionsPage() {
       router.push(`/quiz/${domain}/active?quizId=${quizId}`);
     } catch (err) {
       console.error("Camera permission denied:", err);
-      alert("Camera access is mandatory for proctoring. Please enable your camera in the browser settings and try again.");
+      const confirmProceed = confirm("Camera access was denied. You can still proceed with the test, but you will not be monitored via video. Do you want to start the assessment anyway?");
+      
+      if (confirmProceed) {
+        const params = new URLSearchParams(window.location.search);
+        const quizId = params.get("quizId");
+        router.push(`/quiz/${domain}/active?quizId=${quizId}&camera=denied`);
+      }
     } finally {
       setIsPermissionLoading(false);
     }

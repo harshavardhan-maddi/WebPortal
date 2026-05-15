@@ -57,8 +57,13 @@ export default function ActiveQuizPage() {
         }
       } catch (err) {
         console.error("Camera access denied:", err);
-        setCameraStatus("denied");
-        setError("Camera access is required for proctoring. Please enable your camera and refresh.");
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('camera') === 'denied') {
+          setCameraStatus("denied");
+        } else {
+          setCameraStatus("denied");
+          setError("Camera access was not granted. Please enable your camera if you wish to be proctored.");
+        }
       }
     }
     startCamera();
@@ -124,15 +129,22 @@ export default function ActiveQuizPage() {
       // 1. Check if student already has a result for this quiz
       const { data: existing } = await supabase
         .from('results')
-        .select('id')
+        .select('*')
         .eq('quiz_id', quizId)
-        .eq('roll_number', session.rollNumber)
-        .single();
+        .eq('roll_number', session.rollNumber);
 
-      if (existing) {
+      const realResult = existing?.find(r => r.score !== -1);
+      const specialAccess = existing?.find(r => r.score === -1);
+
+      if (realResult) {
         setError("You have already attempted this exam. Multiple attempts are not allowed.");
         setIsLoading(false);
         return;
+      }
+
+      // If they have special access, we should clear it before starting the new attempt
+      if (specialAccess) {
+        await supabase.from('results').delete().eq('id', specialAccess.id);
       }
 
       // 2. Fetch Quiz
@@ -181,9 +193,7 @@ export default function ActiveQuizPage() {
       if (document.hidden) {
         setWarnings(prev => {
           const next = prev + 1;
-          if (next >= 3) {
-            handleSubmit(); 
-          }
+          // Removed automatic submission on 3 warnings
           return next;
         });
         setIsTabWarningVisible(true);
@@ -275,7 +285,9 @@ export default function ActiveQuizPage() {
         correct: correctCount,
         incorrect: incorrectCount,
         total: totalQuestions,
-        rollNumber: session.rollNumber
+        rollNumber: session.rollNumber,
+        tabSwitches: warnings,
+        cameraDenied: cameraStatus === "denied"
       }));
 
       router.push(`/quiz/${domain}/results`);
@@ -395,19 +407,25 @@ export default function ActiveQuizPage() {
         </div>
       </motion.div>
 
-      {/* Camera Denial Overlay */}
-      {cameraStatus === "denied" && (
-        <div className="fixed inset-0 z-[100] bg-[#05060f] flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-24 h-24 bg-red-500/10 rounded-[2rem] flex items-center justify-center text-red-500 mb-8 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
-            <CameraOff className="w-12 h-12" />
-          </div>
-          <h2 className="text-4xl font-black mb-4">Camera Access Required</h2>
-          <p className="text-muted-foreground max-w-md text-lg mb-8">
-            This assessment is monitored for integrity. You must enable your camera to continue.
-          </p>
-          <Button onClick={() => window.location.reload()} size="lg" className="rounded-2xl px-12 h-14 text-lg font-bold">
-            Enable Camera & Refresh
-          </Button>
+      {/* Camera Denial Overlay (Non-blocking) */}
+      {cameraStatus === "denied" && error && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-full max-w-md">
+          <motion.div 
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="glass p-4 rounded-2xl border border-orange-500/30 bg-orange-500/5 flex items-center gap-4 shadow-2xl"
+          >
+            <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+              <CameraOff className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-orange-400">Camera Access Denied</p>
+              <p className="text-[10px] text-muted-foreground">Proctoring is disabled. You may continue, but this will be recorded.</p>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setError("")} className="h-8 w-8 p-0">
+              <XCircle className="w-4 h-4" />
+            </Button>
+          </motion.div>
         </div>
       )}
 
@@ -469,9 +487,9 @@ export default function ActiveQuizPage() {
                   Suspicious activity detected. <span className="text-white font-bold">Do not use mobile devices, scan questions, or switch tabs.</span>
                 </p>
                 <p className="text-red-400 mt-4 text-sm">
-                  Warning <span className="text-white font-bold">{warnings}</span> of 3.
+                  Tab Switch Count: <span className="text-white font-bold">{warnings}</span>
                 </p>
-                {warnings >= 3 && <p className="text-red-400 mt-2 font-bold uppercase text-xs animate-pulse">Automatic Submission Triggered...</p>}
+                {warnings >= 3 && <p className="text-red-400 mt-2 font-bold uppercase text-xs">Test continues, but activity is logged.</p>}
               </div>
               <Button onClick={() => setIsTabWarningVisible(false)} className="w-full">
                 I Understand

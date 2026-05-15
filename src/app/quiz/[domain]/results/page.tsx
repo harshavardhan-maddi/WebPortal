@@ -76,12 +76,28 @@ export default function ResultsPage() {
               </p>
               <h3 className="text-2xl font-bold mt-1">Final Score: {result.score}%</h3>
             </div>
-            <div className="w-full md:w-64 h-3 bg-white/10 rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${result.score}%` }}
-                className="h-full bg-primary"
-              />
+            <div className="flex-1 max-w-xs space-y-4">
+              <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${result.score}%` }}
+                  className="h-full bg-primary"
+                />
+              </div>
+              <div className="flex items-center justify-between px-2">
+                <div className="text-left">
+                  <p className="text-[10px] font-black text-muted-foreground uppercase">Tab Switches</p>
+                  <p className={`text-sm font-bold ${result.tabSwitches > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                    {result.tabSwitches || 0}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-muted-foreground uppercase">Camera Access</p>
+                  <p className={`text-sm font-bold ${result.cameraDenied ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {result.cameraDenied ? 'Denied' : 'Granted'}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
