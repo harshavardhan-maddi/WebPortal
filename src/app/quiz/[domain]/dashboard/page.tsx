@@ -108,12 +108,13 @@ export default function StudentDashboard() {
       const processedQuizzes = (quizzes || []).map((q: any) => {
         const quizEndTime = new Date(`${q.date}T${q.end_time || '23:59:59'}`);
         const result = (results || []).find(r => r.quiz_id === q.id);
+        const hasSpecialAccess = result && result.score === -1;
         
         return {
           ...q,
           isToday: q.date === todayStr,
-          isExpired: quizEndTime < new Date(),
-          result: result || null,
+          isExpired: hasSpecialAccess ? false : quizEndTime < new Date(),
+          result: hasSpecialAccess ? null : (result || null),
           duration: "30 Mins"
         };
       });

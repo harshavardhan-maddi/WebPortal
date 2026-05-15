@@ -277,6 +277,45 @@ export default function AdminManagementPage() {
     else fetchAllData(adminSession, selectedBatch);
   };
 
+  const grantSpecialAccess = async (rollNumber: string, quizId: string) => {
+    const quiz = quizzes.find(q => q.id === quizId);
+    if (!confirm(`Grant special access to ${rollNumber} for "${quiz?.title}"? This will allow them to attempt it even if it has expired.`)) return;
+
+    // Safety check for domain leaders
+    if (adminSession?.role === "domain-admin") {
+      const student = students.find(s => s.roll_number === rollNumber);
+      if (student && student.domain !== adminSession.domain) {
+        alert("You can only grant access for students in your domain.");
+        return;
+      }
+    }
+
+    const { error } = await supabase
+      .from('results')
+      .insert([{
+        quiz_id: quizId,
+        roll_number: rollNumber,
+        score: -1, // Special flag for access granted
+        correct: 0,
+        incorrect: 0,
+        total: quiz?.questions?.length || 0,
+        time_taken: -1,
+        domain: adminSession?.role === "domain-admin" ? adminSession.domain : (students.find(s => s.roll_number === rollNumber)?.domain || 'all'),
+        batch: selectedBatch
+      }]);
+
+    if (error) {
+      if (error.code === '23505') { // Unique constraint (already has a result)
+        alert("Student already has a result or access granted for this quiz. Reset their attempt first.");
+      } else {
+        alert(`Error granting access: ${error.message}`);
+      }
+    } else {
+      alert(`Special access granted to ${rollNumber}`);
+      fetchAllData(adminSession, selectedBatch);
+    }
+  };
+
   const handleAcceptPasswordRequest = async (request: any) => {
     if (!confirm(`Accept password change for ${request.roll_number}?`)) return;
 
@@ -536,23 +575,51 @@ export default function AdminManagementPage() {
                                 </div>
                               </div>
                               
-                              <div className="flex items-center gap-4 relative z-10">
-                                {score !== null && (
-                                  <>
-                                    <div className="text-right">
-                                      <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                      <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                                    </div>
-                                    <Button 
-                                      variant="ghost" 
-                                      onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
-                                      className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
-                                      title="Reset Attempt"
-                                    >
-                                      <RotateCcw className="w-5 h-5" />
-                                    </Button>
-                                  </>
-                                )}
+                                <div className="flex items-center gap-4 relative z-10">
+                                  {score !== null ? (
+                                    score === -1 ? (
+                                      <div className="text-right flex items-center gap-3">
+                                        <div className="text-right">
+                                          <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
+                                          <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
+                                        </div>
+                                        <Button 
+                                          variant="ghost" 
+                                          onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
+                                          className="h-10 w-10 p-0 text-red-400 hover:bg-red-400/10 rounded-xl"
+                                          title="Revoke Access"
+                                        >
+                                          <XCircle className="w-5 h-5" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <div className="text-right">
+                                          <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                          <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                                        </div>
+                                        <Button 
+                                          variant="ghost" 
+                                          onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
+                                          className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
+                                          title="Reset Attempt"
+                                        >
+                                          <RotateCcw className="w-5 h-5" />
+                                        </Button>
+                                      </>
+                                    )
+                                  ) : (
+                                    selectedQuizForGrades && (
+                                      <Button 
+                                        variant="ghost" 
+                                        onClick={(e) => { e.stopPropagation(); grantSpecialAccess(student.roll_number, selectedQuizForGrades); }}
+                                        className="h-10 w-10 p-0 text-primary hover:bg-primary/10 rounded-xl border border-primary/20"
+                                        title="Grant Special Access"
+                                      >
+                                        <Clock className="w-5 h-5" />
+                                      </Button>
+                                    )
+                                  )}
                                 <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -580,21 +647,49 @@ export default function AdminManagementPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-4 relative z-10">
-                          {score !== null && (
-                            <>
-                              <div className="text-right">
-                                <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                          {score !== null ? (
+                            score === -1 ? (
+                              <div className="text-right flex items-center gap-3">
+                                <div className="text-right">
+                                  <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
+                                  <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
+                                  className="h-10 w-10 p-0 text-red-400 hover:bg-red-400/10 rounded-xl"
+                                  title="Revoke Access"
+                                >
+                                  <XCircle className="w-5 h-5" />
+                                </Button>
                               </div>
+                            ) : (
+                              <>
+                                <div className="text-right">
+                                  <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                  <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
+                                  className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
+                                  title="Reset Attempt"
+                                >
+                                  <RotateCcw className="w-5 h-5" />
+                                </Button>
+                              </>
+                            )
+                          ) : (
+                            selectedQuizForGrades && (
                               <Button 
                                 variant="ghost" 
-                                onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
-                                className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
-                                title="Reset Attempt"
+                                onClick={(e) => { e.stopPropagation(); grantSpecialAccess(student.roll_number, selectedQuizForGrades); }}
+                                className="h-10 w-10 p-0 text-primary hover:bg-primary/10 rounded-xl border border-primary/20"
+                                title="Grant Special Access"
                               >
-                                <RotateCcw className="w-5 h-5" />
+                                <Clock className="w-5 h-5" />
                               </Button>
-                            </>
+                            )
                           )}
                           <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
                             <Trash2 className="w-4 h-4" />
