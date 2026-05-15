@@ -115,6 +115,7 @@ export default function StudentDashboard() {
         return {
           ...q,
           isToday: q.date === todayStr,
+          hasSpecialAccess,
           isExpired: hasSpecialAccess ? false : quizEndTime < new Date(),
           result: hasSpecialAccess ? null : (result || null),
           duration: "30 Mins"
@@ -228,8 +229,8 @@ export default function StudentDashboard() {
 function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCompleted: boolean, onStart: () => void, currentTime: Date }) {
   const quizStartTime = new Date(`${quiz.date}T${quiz.time}`);
   const quizEndTime = new Date(`${quiz.date}T${quiz.end_time || '23:59:59'}`);
-  const isLocked = currentTime < quizStartTime;
-  const isExpired = currentTime > quizEndTime;
+  const isLocked = !quiz.hasSpecialAccess && currentTime < quizStartTime;
+  const isExpired = !quiz.hasSpecialAccess && currentTime > quizEndTime;
   const result = quiz.result;
   
   // Calculate countdown
@@ -259,7 +260,14 @@ function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCo
              isLocked ? <Lock className="w-8 h-8" /> : <Clock className="w-8 h-8" />}
           </div>
           <div>
-            <h3 className="text-xl font-black tracking-tight">{quiz.title}</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-xl font-black tracking-tight">{quiz.title}</h3>
+              {quiz.hasSpecialAccess && (
+                <span className="px-2 py-0.5 rounded-md bg-primary/20 text-primary text-[8px] font-black uppercase tracking-widest border border-primary/30">
+                  Special Access
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-4 mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
               <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3 text-primary" /> {quiz.date}</span>
               <span className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-primary" /> {quiz.time} - {quiz.end_time || '23:59'}</span>
