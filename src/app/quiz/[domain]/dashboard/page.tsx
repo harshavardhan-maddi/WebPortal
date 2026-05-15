@@ -100,7 +100,9 @@ export default function StudentDashboard() {
       if (rError) throw rError;
 
       setAllResults(results || []);
-      const completedIds = results?.map(r => r.quiz_id) || [];
+      const completedIds = (results || [])
+        .filter(r => r.score !== -1)
+        .map(r => r.quiz_id);
       setCompletedQuizzes(completedIds);
 
       const todayStr = new Date().toISOString().split('T')[0];
@@ -269,7 +271,7 @@ function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCo
         </div>
 
         <div className="flex items-center gap-6">
-          {isCompleted ? (
+          {isCompleted && result ? (
             <div className="flex items-center gap-8">
                 <div className="text-right">
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Score Result</p>
