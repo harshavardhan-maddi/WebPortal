@@ -11,6 +11,7 @@ export default function InstructionsPage() {
   const router = useRouter();
   const [student, setStudent] = useState<any>(null);
   const [activeQuiz, setActiveQuiz] = useState<any>(null);
+  const [isPermissionLoading, setIsPermissionLoading] = useState(false);
 
   useEffect(() => {
     const session = localStorage.getItem("student_session");
@@ -32,10 +33,26 @@ export default function InstructionsPage() {
     }
   }, [router]);
 
-  const startQuiz = () => {
-    const params = new URLSearchParams(window.location.search);
-    const quizId = params.get("quizId");
-    router.push(`/quiz/${domain}/active?quizId=${quizId}`);
+  const startQuiz = async () => {
+    setIsPermissionLoading(true);
+    try {
+      // Request camera permission
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "user", width: 640, height: 480 } 
+      });
+      
+      // Stop the tracks immediately as we just wanted to check permission/initialize
+      stream.getTracks().forEach(track => track.stop());
+      
+      const params = new URLSearchParams(window.location.search);
+      const quizId = params.get("quizId");
+      router.push(`/quiz/${domain}/active?quizId=${quizId}`);
+    } catch (err) {
+      console.error("Camera permission denied:", err);
+      alert("Camera access is mandatory for proctoring. Please enable your camera in the browser settings and try again.");
+    } finally {
+      setIsPermissionLoading(false);
+    }
   };
 
   if (!student) return null;
@@ -114,10 +131,20 @@ export default function InstructionsPage() {
 
         <Button 
           onClick={startQuiz} 
+          disabled={isPermissionLoading}
           className="w-full h-16 rounded-2xl text-xl font-bold shadow-xl shadow-primary/20 group"
         >
-          Enter Fullscreen & Start Quiz
-          <Monitor className="ml-3 w-6 h-6 group-hover:scale-110 transition-transform" />
+          {isPermissionLoading ? (
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Requesting Camera Access...
+            </div>
+          ) : (
+            <>
+              Enter Fullscreen & Start Quiz
+              <Monitor className="ml-3 w-6 h-6 group-hover:scale-110 transition-transform" />
+            </>
+          )}
         </Button>
       </motion.div>
     </div>
