@@ -132,9 +132,8 @@ export default function AdminManagementPage() {
     const { data: rData } = await resultsQuery;
     setResults(rData || []);
 
-    let requestsQuery = supabase.from('pwd_requests').select('*').order('created_at', { ascending: false });
-    if (domainFilter && batch === "3rd Year Super 50") requestsQuery = requestsQuery.eq('domain', domainFilter);
-    const { data: prData } = await requestsQuery;
+    // Students with pending password requests
+    const prData = (sData || []).filter(s => s.password_request_status === 'PENDING');
     setPasswordRequests(prData || []);
 
   };
@@ -161,31 +160,57 @@ export default function AdminManagementPage() {
   const handleBulkImport = async () => {
     if (!bulkRollNumbers.trim()) return;
     
-    const rollNumbers = bulkRollNumbers
+    // Get unique roll numbers from input
+    const inputRollNumbers = Array.from(new Set(bulkRollNumbers
       .split(/[\n,]/)
       .map(r => r.trim().toUpperCase())
-      .filter(r => r.length > 0);
+      .filter(r => r.length > 0)));
 
-    if (rollNumbers.length === 0) return;
+    if (inputRollNumbers.length === 0) return;
+
+    // Check for existing students in the database
+    const { data: existingStudents, error: checkError } = await supabase
+      .from('students')
+      .select('roll_number')
+      .in('roll_number', inputRollNumbers);
+
+    if (checkError) {
+      alert(`Error checking existing students: ${checkError.message}`);
+      return;
+    }
+
+    const existingRolls = existingStudents?.map(s => s.roll_number) || [];
+    const newRolls = inputRollNumbers.filter(r => !existingRolls.includes(r));
+
+    if (existingRolls.length > 0) {
+      alert(`Duplicate Detection:\n\nThe following ${existingRolls.length} students are already added to the system and will be skipped:\n\n${existingRolls.join(', ')}`);
+    }
+
+    if (newRolls.length === 0) {
+      alert("No new students to add. All provided roll numbers already exist.");
+      setBulkRollNumbers("");
+      setIsBulkModalOpen(false);
+      return;
+    }
 
     const domainToAssign = selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain);
     
-    const studentsToInsert = rollNumbers.map(roll => ({
+    const studentsToInsert = newRolls.map(roll => ({
       roll_number: roll,
       domain: domainToAssign,
       batch: selectedBatch,
       name: `Student ${roll}`
     }));
 
-    const { error } = await supabase.from('students').insert(studentsToInsert);
+    const { error: insertError } = await supabase.from('students').insert(studentsToInsert);
     
-    if (error) {
-      alert(`Import Failed: ${error.message}`);
+    if (insertError) {
+      alert(`Import Failed: ${insertError.message}`);
     } else {
       setBulkRollNumbers("");
       setIsBulkModalOpen(false);
       fetchAllData(adminSession, selectedBatch);
-      alert(`Successfully imported ${rollNumbers.length} students.`);
+      alert(`Successfully imported ${newRolls.length} new students.`);
     }
   };
 
@@ -257,40 +282,33 @@ export default function AdminManagementPage() {
 
     const { error: sError } = await supabase
       .from('students')
-      .update({ password: request.new_password })
+      .update({ 
+        password: request.requested_password,
+        password_request_status: 'ACCEPTED',
+        requested_password: null
+      })
       .eq('roll_number', request.roll_number);
 
     if (sError) {
-      alert(`Error updating student password: ${sError.message}`);
+      alert(`Error updating student: ${sError.message}`);
       return;
     }
 
-    const { error: rError } = await supabase
-      .from('password_requests')
-      .update({ 
-        status: 'ACCEPTED', 
-        handled_at: new Date().toISOString(),
-        handled_by: adminSession?.name || adminSession?.role
-      })
-      .eq('id', request.id);
-
-    if (rError) alert(`Error updating request: ${rError.message}`);
-    else fetchAllData(adminSession, selectedBatch);
+    fetchAllData(adminSession, selectedBatch);
   };
 
   const handleRejectPasswordRequest = async (request: any) => {
     if (!confirm(`Reject password change for ${request.roll_number}?`)) return;
 
     const { error } = await supabase
-      .from('password_requests')
+      .from('students')
       .update({ 
-        status: 'REJECTED', 
-        handled_at: new Date().toISOString(),
-        handled_by: adminSession?.name || adminSession?.role
+        password_request_status: 'REJECTED',
+        requested_password: null
       })
-      .eq('id', request.id);
+      .eq('roll_number', request.roll_number);
 
-    if (error) alert(`Error updating request: ${error.message}`);
+    if (error) alert(`Error updating student: ${error.message}`);
     else fetchAllData(adminSession, selectedBatch);
   };
 
@@ -675,20 +693,20 @@ export default function AdminManagementPage() {
                     </div>
                     <div className="md:col-span-4 border-l border-white/5 pl-6">
                       <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">New Password</p>
-                      <p className="font-mono text-primary font-bold">{req.new_password}</p>
+                      <p className="font-mono text-primary font-bold">{req.requested_password}</p>
                     </div>
                     <div className="md:col-span-2 text-center">
                       <p className="text-xs text-muted-foreground font-bold uppercase mb-1">Status</p>
                       <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                        req.status === 'ACCEPTED' ? 'bg-emerald-500/20 text-emerald-400' : 
-                        req.status === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 
+                        req.password_request_status === 'ACCEPTED' ? 'bg-emerald-500/20 text-emerald-400' : 
+                        req.password_request_status === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 
                         'bg-orange-500/20 text-orange-400'
                       }`}>
-                        {req.status}
+                        {req.password_request_status}
                       </span>
                     </div>
                     <div className="md:col-span-3 flex justify-end gap-2">
-                      {req.status === 'PENDING' && (
+                      {req.password_request_status === 'PENDING' && (
                         <>
                           <Button 
                             onClick={() => handleRejectPasswordRequest(req)}
@@ -703,11 +721,6 @@ export default function AdminManagementPage() {
                             Accept
                           </Button>
                         </>
-                      )}
-                      {req.status !== 'PENDING' && (
-                        <p className="text-[10px] text-muted-foreground italic">
-                          Handled by {req.handled_by || 'Admin'}
-                        </p>
                       )}
                     </div>
                  </div>

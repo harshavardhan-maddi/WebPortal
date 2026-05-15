@@ -123,34 +123,8 @@ export default function StudentLoginPage() {
         router.push(`/quiz/${formData.domain}/dashboard`);
 
       } else {
-        // 2. Fallback to hardcoded whitelist for Cyber Security (Original requirement)
-        const cyberSecurityWhitelist = [
-          "25475A4603", "24471A4652", "24471A4617", "24471A4624", "24471A4656",
-          "24471A4608", "24471A4604", "24471A4610", "24471A4609", "24471A4611",
-          "24471A4616", "24471A4644", "24471A4627", "24471A4658", "25475A4606",
-          "25475A4605", "24471A4643", "24471A4647", "24471A4606", "24471A4654"
-        ];
-
-        if (formData.password === emailPart && domainPart === "nrtec.in") {
-          if (formData.domain !== "cyber-security" && cyberSecurityWhitelist.includes(emailPart)) {
-            setError("You are not in this domain. Select your domain and attempt your test.");
-          } else if (formData.domain === "cyber-security" && !cyberSecurityWhitelist.includes(emailPart)) {
-            setError("Use correct credentials to attempt the test.");
-          } else {
-            localStorage.setItem("student_session", JSON.stringify({
-              email: formData.email,
-              domain: formData.domain,
-              batch: formData.batch, // Include batch in fallback session
-              rollNumber: emailPart,
-              name: emailPart,
-              token: Math.random().toString(36).substring(7),
-            }));
-            router.push(`/quiz/${formData.domain}/dashboard`);
-
-          }
-        } else {
-          setError("Use correct credentials to attempt the test.");
-        }
+        // No student found in the database
+        setError("Roll Number not registered. Please contact your administrator.");
       }
     } catch (err: any) {
       console.error("Login Error:", err);

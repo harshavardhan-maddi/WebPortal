@@ -26,7 +26,7 @@ export default function StudentProfile() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [latestRequest, setLatestRequest] = useState<any>(null);
+  const [requestStatus, setRequestStatus] = useState<any>(null);
 
   useEffect(() => {
     const session = localStorage.getItem("student_session");
@@ -36,22 +36,24 @@ export default function StudentProfile() {
     }
     const studentData = JSON.parse(session);
     setStudent(studentData);
-    fetchLatestRequest(studentData.rollNumber);
+    fetchRequestStatus(studentData.rollNumber);
 
-    // Real-time listener for request status changes
+    // Real-time listener for student record changes
     const channel = supabase
-      .channel('password-requests-status')
+      .channel('student-request-status')
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'pwd_requests',
+          table: 'students',
           filter: `roll_number=eq.${studentData.rollNumber}`
         },
         (payload) => {
-          setLatestRequest(payload.new);
-          // Show message status update
+          setRequestStatus({
+            status: payload.new.password_request_status,
+            requested_password: payload.new.requested_password
+          });
         }
       )
       .subscribe();
@@ -61,16 +63,18 @@ export default function StudentProfile() {
     };
   }, [router]);
 
-  const fetchLatestRequest = async (rollNumber: string) => {
+  const fetchRequestStatus = async (rollNumber: string) => {
     const { data, error } = await supabase
-      .from('pwd_requests')
-      .select('*')
+      .from('students')
+      .select('password_request_status, requested_password')
       .eq('roll_number', rollNumber)
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .single();
 
-    if (data && data.length > 0) {
-      setLatestRequest(data[0]);
+    if (data) {
+      setRequestStatus({
+        status: data.password_request_status,
+        requested_password: data.requested_password
+      });
     }
   };
 
@@ -89,14 +93,12 @@ export default function StudentProfile() {
     setMessage(null);
 
     const { error } = await supabase
-      .from('pwd_requests')
-      .insert([{
-        roll_number: student.rollNumber,
-        new_password: newPassword,
-        domain: domain,
-        batch: student.batch,
-        status: 'PENDING'
-      }]);
+      .from('students')
+      .update({
+        requested_password: newPassword,
+        password_request_status: 'PENDING'
+      })
+      .eq('roll_number', student.rollNumber);
 
     if (error) {
       setMessage({ type: "error", text: error.message });
@@ -104,7 +106,7 @@ export default function StudentProfile() {
       setMessage({ type: "success", text: "Request sent successfully! Waiting for leader approval." });
       setNewPassword("");
       setConfirmPassword("");
-      fetchLatestRequest(student.rollNumber);
+      fetchRequestStatus(student.rollNumber);
     }
     setIsSubmitting(false);
   };
@@ -127,7 +129,6 @@ export default function StudentProfile() {
         </div>
 
         <div className="grid gap-8">
-          {/* Student Info Card */}
           <div className="glass p-8 rounded-[2.5rem] border border-white/5 space-y-6">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
@@ -138,19 +139,8 @@ export default function StudentProfile() {
                 <p className="text-muted-foreground font-bold">{student.rollNumber} | {student.batch}</p>
               </div>
             </div>
-            <div className="pt-6 border-t border-white/5 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-1">Domain</p>
-                <p className="font-bold capitalize text-primary">{domain?.toString().replace('-', ' ')}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-1">Email</p>
-                <p className="font-bold">{student.email}</p>
-              </div>
-            </div>
           </div>
 
-          {/* Password Request Form */}
           <div className="glass p-8 rounded-[2.5rem] border border-white/10 space-y-8 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-10">
                 <Lock className="w-24 h-24" />
@@ -201,61 +191,46 @@ export default function StudentProfile() {
 
               <Button 
                 type="submit" 
-                disabled={isSubmitting || (latestRequest && latestRequest.status === 'PENDING')}
+                disabled={isSubmitting || (requestStatus?.status === 'PENDING')}
                 className="w-full h-14 rounded-2xl text-lg font-black bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
               >
                 {isSubmitting ? "Sending Request..." : "Submit Request"}
               </Button>
-              
-              {latestRequest && latestRequest.status === 'PENDING' && (
-                <p className="text-center text-[10px] text-orange-400 font-black uppercase tracking-widest">
-                  Awaiting Leader Approval
-                </p>
-              )}
             </form>
           </div>
 
-          {/* Request Status */}
-          {latestRequest && (
+          {requestStatus && requestStatus.status !== 'NONE' && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className={`glass p-8 rounded-[2.5rem] border ${
-                latestRequest.status === 'ACCEPTED' ? 'border-emerald-500/20 bg-emerald-500/5' : 
-                latestRequest.status === 'REJECTED' ? 'border-red-500/20 bg-red-500/5' : 
+                requestStatus.status === 'ACCEPTED' ? 'border-emerald-500/20 bg-emerald-500/5' : 
+                requestStatus.status === 'REJECTED' ? 'border-red-500/20 bg-red-500/5' : 
                 'border-orange-500/20 bg-orange-500/5'
               } space-y-4`}
             >
               <div className="flex items-center justify-between">
                 <h3 className="font-black flex items-center gap-2 text-lg">
-                  {latestRequest.status === 'ACCEPTED' ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : 
-                   latestRequest.status === 'REJECTED' ? <XCircle className="w-6 h-6 text-red-400" /> : 
+                  {requestStatus.status === 'ACCEPTED' ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : 
+                   requestStatus.status === 'REJECTED' ? <XCircle className="w-6 h-6 text-red-400" /> : 
                    <Clock className="w-6 h-6 text-orange-400" />}
-                  Request Updates
+                  Request Status
                 </h3>
                 <span className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full ${
-                  latestRequest.status === 'ACCEPTED' ? 'bg-emerald-400 text-black' : 
-                  latestRequest.status === 'REJECTED' ? 'bg-red-500 text-white' : 
+                  requestStatus.status === 'ACCEPTED' ? 'bg-emerald-400 text-black' : 
+                  requestStatus.status === 'REJECTED' ? 'bg-red-500 text-white' : 
                   'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                 }`}>
-                  {latestRequest.status}
+                  {requestStatus.status}
                 </span>
               </div>
               <p className="text-sm text-muted-foreground font-medium leading-relaxed">
-                {latestRequest.status === 'ACCEPTED' ? 
-                  "Your password change request has been accepted. You can now use your new password to login. Changes are reflected immediately." : 
-                 latestRequest.status === 'REJECTED' ? 
-                  "Your password change request was rejected by the domain leader. Please contact your coordinator for more details." : 
-                  "Your request is currently under review. Leaders will be notified of your request shortly."}
+                {requestStatus.status === 'ACCEPTED' ? 
+                  "Your request has been approved! You can now use your new password." : 
+                 requestStatus.status === 'REJECTED' ? 
+                  "Your request was rejected. Please contact your coordinator." : 
+                  "Your request is pending leader approval."}
               </p>
-              <div className="flex justify-between items-center pt-2">
-                 <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">
-                   Request ID: {latestRequest.id.split('-')[0]}
-                 </p>
-                 <p className="text-[10px] text-muted-foreground font-black italic">
-                   {new Date(latestRequest.created_at).toLocaleString()}
-                 </p>
-              </div>
             </motion.div>
           )}
         </div>
