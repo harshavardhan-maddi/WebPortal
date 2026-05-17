@@ -40,6 +40,9 @@ export default function ActiveQuizPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraStatus, setCameraStatus] = useState<"loading" | "active" | "denied">("loading");
+  
+  // Anti-Screenshot / Circle to Search state
+  const [isBlurred, setIsBlurred] = useState(false);
 
   const currentQuestion = questions[currentQuestionIndex];
 
@@ -188,7 +191,7 @@ export default function ActiveQuizPage() {
     }
   };
 
-  // Anti-cheat: Tab switch detection
+  // Anti-cheat: Tab switch detection and Blur detection (Circle to Search)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -198,8 +201,14 @@ export default function ActiveQuizPage() {
           return next;
         });
         setIsTabWarningVisible(true);
+        setIsBlurred(true);
+      } else {
+        setIsBlurred(false);
       }
     };
+
+    const handleBlur = () => setIsBlurred(true);
+    const handleFocus = () => setIsBlurred(false);
 
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -211,11 +220,15 @@ export default function ActiveQuizPage() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [router, domain]);
 
@@ -318,7 +331,7 @@ export default function ActiveQuizPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#05060f] text-white overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-[#05060f] text-white overflow-hidden flex flex-col select-none">
       {/* Header */}
       <header className="h-20 glass border-b border-white/5 px-6 flex items-center justify-between z-20">
         <div className="flex items-center gap-4">
@@ -506,6 +519,17 @@ export default function ActiveQuizPage() {
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-6" />
           <h2 className="text-2xl font-bold">Submitting Assessment...</h2>
           <p className="text-muted-foreground">Calculating your performance metrics</p>
+        </div>
+      )}
+
+      {/* Circle to Search / Blur Protection Overlay */}
+      {isBlurred && (
+        <div className="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-6 text-center">
+          <AlertTriangle className="w-16 h-16 text-red-500 mb-6" />
+          <h2 className="text-3xl font-black text-white">Screen Capture Blocked</h2>
+          <p className="text-muted-foreground mt-4 max-w-md">
+            Please return focus to the assessment window to continue. Screen capturing and external search tools are not allowed.
+          </p>
         </div>
       )}
     </div>
