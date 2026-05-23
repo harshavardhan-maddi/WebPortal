@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Calendar, 
   Clock, 
@@ -30,6 +30,12 @@ export default function StudentDashboard() {
   const [allQuizzes, setAllQuizzes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Re-attempt feature states
+  const [isReattemptModalOpen, setIsReattemptModalOpen] = useState(false);
+  const [selectedQuizForReattempt, setSelectedQuizForReattempt] = useState<any>(null);
+  const [reattemptReason, setReattemptReason] = useState("");
+  const [isSubmittingReattempt, setIsSubmittingReattempt] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -101,7 +107,7 @@ export default function StudentDashboard() {
 
       setAllResults(results || []);
       const completedIds = (results || [])
-        .filter(r => r.score !== -1)
+        .filter(r => r.score !== -1 && r.score !== -2)
         .map(r => r.quiz_id);
       setCompletedQuizzes(completedIds);
 
@@ -110,7 +116,7 @@ export default function StudentDashboard() {
       const processedQuizzes = (quizzes || []).map((q: any) => {
         const quizEndTime = new Date(`${q.date}T${q.end_time || '23:59:59'}`);
         const result = (results || []).find(r => r.quiz_id === q.id);
-        const hasSpecialAccess = result && result.score === -1;
+        const hasSpecialAccess = result && (result.score === -1 || result.score === -2);
         
         return {
           ...q,
@@ -129,6 +135,79 @@ export default function StudentDashboard() {
       console.error("Error fetching student dashboard data:", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleOpenReattemptModal = (quiz: any) => {
+    setSelectedQuizForReattempt(quiz);
+    setReattemptReason("");
+    setIsReattemptModalOpen(true);
+  };
+
+  const handleConfirmReattempt = async () => {
+    if (!reattemptReason.trim()) {
+      alert("Please enter a valid reason.");
+      return;
+    }
+    setIsSubmittingReattempt(true);
+    try {
+      const quizId = selectedQuizForReattempt.id;
+      const today = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+      
+      const existingResult = allResults.find(r => r.quiz_id === quizId);
+      
+      if (existingResult) {
+        const newCount = (existingResult.reattempt_count || 0) + 1;
+        const formattedReason = `[Attempt ${newCount} - ${today}]: ${reattemptReason}`;
+        const newReason = existingResult.reattempt_reason 
+          ? `${existingResult.reattempt_reason}\n${formattedReason}` 
+          : formattedReason;
+
+        const { error } = await supabase
+          .from('results')
+          .update({
+            score: -2,
+            correct: 0,
+            incorrect: 0,
+            time_taken: 0,
+            reattempt_count: newCount,
+            reattempt_reason: newReason
+          })
+          .eq('id', existingResult.id);
+
+        if (error) throw error;
+      } else {
+        const newReason = `[Attempt 1 - ${today}]: ${reattemptReason}`;
+        const { error } = await supabase
+          .from('results')
+          .insert([{
+            quiz_id: quizId,
+            domain: domain,
+            batch: student.batch,
+            roll_number: student.rollNumber,
+            score: -2,
+            correct: 0,
+            incorrect: 0,
+            total: selectedQuizForReattempt.questions?.length || 0,
+            time_taken: 0,
+            reattempt_count: 1,
+            reattempt_reason: newReason
+          }]);
+
+        if (error) throw error;
+      }
+
+      setIsReattemptModalOpen(false);
+      
+      // Re-fetch data to update UI states in real time
+      await fetchData(student);
+      
+      router.push(`/quiz/${domain}/instructions?quizId=${quizId}`);
+    } catch (err: any) {
+      console.error("Reattempt initiation failed:", err);
+      alert(`Failed to authorize re-attempt: ${err.message}`);
+    } finally {
+      setIsSubmittingReattempt(false);
     }
   };
 
@@ -188,6 +267,7 @@ export default function StudentDashboard() {
                   currentTime={currentTime}
                   isCompleted={false}
                   onStart={() => handleStartQuiz(quiz.id)}
+                  onReattempt={() => handleOpenReattemptModal(quiz)}
                 />
               ))}
               {allQuizzes.filter(q => !q.isExpired && !completedQuizzes.includes(q.id)).length === 0 && (
@@ -216,17 +296,85 @@ export default function StudentDashboard() {
                   currentTime={currentTime}
                   isCompleted={completedQuizzes.includes(quiz.id)}
                   onStart={() => handleStartQuiz(quiz.id)}
+                  onReattempt={() => handleOpenReattemptModal(quiz)}
                 />
               ))}
             </div>
           </section>
         </div>
       </div>
+
+      {/* Re-attempt Justification Modal */}
+      <AnimatePresence>
+        {isReattemptModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-lg glass p-8 rounded-[2.5rem] border border-white/10 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setIsReattemptModalOpen(false)}
+                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-muted-foreground hover:text-white"
+              >
+                ✕
+              </button>
+
+              <div className="flex items-center gap-4 mb-6">
+                <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400">
+                  <PlayCircle className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black">Request Assessment</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">Quiz: {selectedQuizForReattempt?.title}</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase text-muted-foreground tracking-widest ml-1">
+                    Justification Reason
+                  </label>
+                  <textarea
+                    value={reattemptReason}
+                    onChange={(e) => setReattemptReason(e.target.value)}
+                    placeholder="Provide a valid reason for attempting this assessment (e.g. sick, power outage, technical issues, low initial score)..."
+                    className="w-full h-32 p-4 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none text-sm placeholder:text-muted-foreground/50 text-white"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-4">
+                  <Button
+                    onClick={() => setIsReattemptModalOpen(false)}
+                    variant="glass"
+                    className="flex-1 h-14 rounded-2xl font-bold border-white/5 hover:bg-white/5"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleConfirmReattempt}
+                    disabled={isSubmittingReattempt}
+                    className="flex-1 h-14 rounded-2xl font-bold bg-primary hover:bg-primary/95 text-white flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingReattempt ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      "Confirm & Start"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCompleted: boolean, onStart: () => void, currentTime: Date }) {
+function QuizCard({ quiz, isCompleted, onStart, onReattempt, currentTime }: { quiz: any, isCompleted: boolean, onStart: () => void, onReattempt?: () => void, currentTime: Date }) {
   const quizStartTime = new Date(`${quiz.date}T${quiz.time}`);
   const quizEndTime = new Date(`${quiz.date}T${quiz.end_time || '23:59:59'}`);
   const isLocked = !quiz.hasSpecialAccess && currentTime < quizStartTime;
@@ -281,24 +429,45 @@ function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCo
         <div className="flex items-center gap-6">
           {isCompleted && result ? (
             <div className="flex items-center gap-8">
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Score Result</p>
-                    <p className="text-2xl font-black text-emerald-400">
-                        {result.correct}/{result.total}
-                    </p>
-                </div>
-                <div className="h-10 w-[1px] bg-white/10" />
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Percentage</p>
-                    <p className="text-2xl font-black text-primary">
-                        {result.score}%
-                    </p>
-                </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Score Result</p>
+                <p className="text-2xl font-black text-emerald-400">
+                  {result.correct}/{result.total}
+                </p>
+              </div>
+              <div className="h-10 w-[1px] bg-white/10" />
+              <div className="text-right">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Percentage</p>
+                <p className="text-2xl font-black text-primary">
+                  {result.score}%
+                </p>
+              </div>
+              {result.score === 0 && onReattempt && (
+                <>
+                  <div className="h-10 w-[1px] bg-white/10" />
+                  <Button 
+                    onClick={onReattempt}
+                    className="rounded-full px-6 h-10 font-black text-[10px] uppercase tracking-widest bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/20 text-white"
+                  >
+                    Re-attempt
+                  </Button>
+                </>
+              )}
             </div>
           ) : isExpired ? (
-            <div className="text-right">
+            <div className="flex items-center gap-4">
+              <div className="text-right">
                 <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Status</p>
                 <p className="text-lg font-black text-muted-foreground italic">Not Attempted</p>
+              </div>
+              {onReattempt && (
+                <Button 
+                  onClick={onReattempt}
+                  className="rounded-full px-6 h-10 font-black text-[10px] uppercase tracking-widest bg-primary hover:bg-primary/80 shadow-lg shadow-primary/20 text-white"
+                >
+                  Attempt Expired
+                </Button>
+              )}
             </div>
           ) : isLocked ? (
             <div className="flex flex-col items-end gap-1">
@@ -309,7 +478,7 @@ function QuizCard({ quiz, isCompleted, onStart, currentTime }: { quiz: any, isCo
           ) : (
             <Button 
               onClick={onStart}
-              className="rounded-full px-8 h-12 font-black text-xs uppercase tracking-widest flex items-center gap-2 group bg-primary shadow-lg shadow-primary/20"
+              className="rounded-full px-8 h-12 font-black text-xs uppercase tracking-widest flex items-center gap-2 group bg-primary shadow-lg shadow-primary/20 text-white"
             >
               Start Now <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Button>

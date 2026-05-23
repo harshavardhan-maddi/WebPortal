@@ -137,7 +137,8 @@ export default function ActiveQuizPage() {
         .eq('quiz_id', quizId)
         .eq('roll_number', session.rollNumber);
 
-      const realResult = existing?.find(r => r.score !== -1);
+      const realResult = existing?.find(r => r.score !== -1 && r.score !== -2);
+      const authorizedReattempt = existing?.find(r => r.score === -2);
       const specialAccess = existing?.find(r => r.score === -1);
 
       if (realResult) {
@@ -146,8 +147,15 @@ export default function ActiveQuizPage() {
         return;
       }
 
-      // If they have special access, we should clear it before starting the new attempt
-      if (specialAccess) {
+      let currentReattemptCount = 0;
+      let currentReattemptReason = "";
+
+      // If they have an authorized re-attempt, we should extract the stats and clear it before starting the new attempt
+      if (authorizedReattempt) {
+        currentReattemptCount = authorizedReattempt.reattempt_count || 0;
+        currentReattemptReason = authorizedReattempt.reattempt_reason || "";
+        await supabase.from('results').delete().eq('id', authorizedReattempt.id);
+      } else if (specialAccess) {
         await supabase.from('results').delete().eq('id', specialAccess.id);
       }
 
@@ -173,7 +181,9 @@ export default function ActiveQuizPage() {
           correct: 0,
           incorrect: 0,
           total: quizData.questions.length,
-          time_taken: 0
+          time_taken: 0,
+          reattempt_count: currentReattemptCount,
+          reattempt_reason: currentReattemptReason
         }])
         .select()
         .single();
