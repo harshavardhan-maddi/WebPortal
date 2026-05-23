@@ -179,6 +179,7 @@ export default function ActiveQuizPage() {
 
       // 3. Create an "Incomplete" entry immediately to lock the attempt
       // If the student closes the browser now, they won't be able to re-enter.
+      let attemptRecord;
       const { data: newResult, error: rError } = await supabase
         .from('results')
         .insert([{
@@ -197,9 +198,34 @@ export default function ActiveQuizPage() {
         .select()
         .single();
 
-      if (rError) throw rError;
+      if (rError) {
+        if (rError.message.includes("column") || rError.message.includes("schema cache") || rError.message.includes("cache")) {
+          console.warn("Re-attempt columns not found in active database cache. Falling back to basic attempt entry.");
+          const { data: fbResult, error: fbError } = await supabase
+            .from('results')
+            .insert([{
+              quiz_id: quizId,
+              domain: domain,
+              batch: session.batch,
+              roll_number: session.rollNumber,
+              score: 0,
+              correct: 0,
+              incorrect: 0,
+              total: quizData.questions.length,
+              time_taken: 0
+            }])
+            .select()
+            .single();
+          if (fbError) throw fbError;
+          attemptRecord = fbResult;
+        } else {
+          throw rError;
+        }
+      } else {
+        attemptRecord = newResult;
+      }
 
-      setAttemptId(newResult.id);
+      setAttemptId(attemptRecord.id);
       setQuestions(quizData.questions);
       setIsLoading(false);
 

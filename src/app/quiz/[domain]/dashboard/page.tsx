@@ -175,7 +175,23 @@ export default function StudentDashboard() {
           })
           .eq('id', existingResult.id);
 
-        if (error) throw error;
+        if (error) {
+          if (error.message.includes("column") || error.message.includes("schema cache") || error.message.includes("cache")) {
+            console.warn("Re-attempt columns not found in active database cache. Falling back to basic re-attempt authorization.");
+            const { error: fallbackError } = await supabase
+              .from('results')
+              .update({
+                score: -2,
+                correct: 0,
+                incorrect: 0,
+                time_taken: 0
+              })
+              .eq('id', existingResult.id);
+            if (fallbackError) throw fallbackError;
+          } else {
+            throw error;
+          }
+        }
       } else {
         const newReason = `[Attempt 1 - ${today}]: ${reattemptReason}`;
         const { error } = await supabase
@@ -194,7 +210,27 @@ export default function StudentDashboard() {
             reattempt_reason: newReason
           }]);
 
-        if (error) throw error;
+        if (error) {
+          if (error.message.includes("column") || error.message.includes("schema cache") || error.message.includes("cache")) {
+            console.warn("Re-attempt columns not found in active database cache. Falling back to basic re-attempt insertion.");
+            const { error: fallbackError } = await supabase
+              .from('results')
+              .insert([{
+                quiz_id: quizId,
+                domain: domain,
+                batch: student.batch,
+                roll_number: student.rollNumber,
+                score: -2,
+                correct: 0,
+                incorrect: 0,
+                total: selectedQuizForReattempt.questions?.length || 0,
+                time_taken: 0
+              }]);
+            if (fallbackError) throw fallbackError;
+          } else {
+            throw error;
+          }
+        }
       }
 
       setIsReattemptModalOpen(false);
