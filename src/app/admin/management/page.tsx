@@ -619,11 +619,11 @@ export default function AdminManagementPage() {
             setOverrideMarks("");
             setIsManualMarksModalOpen(true);
           }}
-          className="absolute top-4 right-4 p-2 rounded-lg text-white/0 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-300 z-50 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest cursor-pointer group"
+          className="absolute top-4 right-4 p-2 rounded-lg text-white/20 hover:text-red-500 hover:bg-red-500/10 border border-white/5 hover:border-red-500/20 transition-all duration-300 z-50 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest cursor-pointer group"
           title="Manual Override"
         >
-          <ShieldAlert className="w-3.5 h-3.5 text-white/0 group-hover:text-red-500 transition-colors" /> 
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity">Override</span>
+          <ShieldAlert className="w-3.5 h-3.5 text-white/30 group-hover:text-red-500 transition-colors" /> 
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">Override</span>
         </button>
       )}
       <div className="max-w-6xl mx-auto space-y-10">

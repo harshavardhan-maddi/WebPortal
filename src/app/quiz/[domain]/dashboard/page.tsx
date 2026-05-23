@@ -16,7 +16,9 @@ import {
   XCircle,
   BarChart3,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  Trophy,
+  ShieldAlert
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
@@ -36,6 +38,9 @@ export default function StudentDashboard() {
   const [selectedQuizForReattempt, setSelectedQuizForReattempt] = useState<any>(null);
   const [reattemptReason, setReattemptReason] = useState("");
   const [isSubmittingReattempt, setIsSubmittingReattempt] = useState(false);
+  const [topThree, setTopThree] = useState<any[]>([]);
+  const [showRankNotification, setShowRankNotification] = useState(false);
+  const [notificationText, setNotificationText] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -72,13 +77,20 @@ export default function StudentDashboard() {
             batch: studentData.batch,
             status: 'online',
             last_seen: new Date().toISOString()
-
           });
         }
       });
 
+    // Leaderboard Live Real-time Listener (dynamic shifts!)
+    const resultsChannel = supabase.channel('results_realtime_student_dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => {
+        fetchData(studentData);
+      })
+      .subscribe();
+
     return () => {
       channel.unsubscribe();
+      supabase.removeChannel(resultsChannel);
     };
   }, [router, domain]);
 
@@ -130,6 +142,66 @@ export default function StudentDashboard() {
 
       setAllQuizzes(processedQuizzes);
       localStorage.setItem("global_quizzes", JSON.stringify(processedQuizzes));
+
+      // Fetch leaderboard data for Top 3 Podium
+      const { data: batchStudents } = await supabase
+        .from('students')
+        .select('roll_number, name, domain')
+        .eq('batch', studentData.batch || '3rd Year Super 50');
+
+      if (batchStudents && batchStudents.length > 0) {
+        const studentRolls = batchStudents.map(s => s.roll_number);
+        const { data: batchResults } = await supabase
+          .from('results')
+          .select('*')
+          .in('roll_number', studentRolls)
+          .neq('score', -1)
+          .neq('score', -2);
+
+        if (batchResults) {
+          const studentCredits = batchStudents.map(s => {
+            const sResults = batchResults.filter(r => r.roll_number === s.roll_number);
+            const totalCredits = sResults.reduce((sum, r) => sum + (r.correct || 0), 0);
+            return {
+              roll_number: s.roll_number,
+              name: s.name,
+              totalCredits
+            };
+          });
+
+          // Sort descending and get top 3
+          const sortedRankings = studentCredits
+            .sort((a, b) => b.totalCredits - a.totalCredits)
+            .filter(r => r.totalCredits > 0)
+            .slice(0, 3);
+
+          setTopThree(prev => {
+            // Check for ranking changes to trigger notification!
+            if (prev.length > 0 && sortedRankings.length > 0) {
+              const prevTopRoll = prev[0]?.roll_number;
+              const newTopRoll = sortedRankings[0]?.roll_number;
+              
+              if (prevTopRoll !== newTopRoll) {
+                // First place swapped!
+                setNotificationText(`🏆 Leaderboard Shift! Roll Number ${newTopRoll} has taken the 1st position in the batch leaderboard!`);
+                setShowRankNotification(true);
+                setTimeout(() => setShowRankNotification(false), 8000);
+              } else {
+                // Check if the current student themselves climbed into the top 3
+                const wasInTop = prev.some(r => r.roll_number === studentData.rollNumber);
+                const isInTop = sortedRankings.some(r => r.roll_number === studentData.rollNumber);
+                if (!wasInTop && isInTop) {
+                  const myRank = sortedRankings.findIndex(r => r.roll_number === studentData.rollNumber) + 1;
+                  setNotificationText(`🎉 Outstanding! You have secured Rank #${myRank} in the batch leaderboard!`);
+                  setShowRankNotification(true);
+                  setTimeout(() => setShowRankNotification(false), 8000);
+                }
+              }
+            }
+            return sortedRankings;
+          });
+        }
+      }
 
     } catch (err) {
       console.error("Error fetching student dashboard data:", err);
@@ -285,6 +357,87 @@ export default function StudentDashboard() {
         </div>
 
         <div className="space-y-12">
+          {/* Live Batch Rankings Podium */}
+          {topThree.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }} 
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full max-w-sm glass border border-white/10 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden flex flex-col gap-4 self-start"
+            >
+              {/* Notification Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Live Batch Rankings</span>
+                </div>
+                <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">{student.batch}</span>
+              </div>
+
+              {/* 3D-effect Podium Bar Graph */}
+              <div className="flex items-end justify-center gap-4 pt-6 pb-2 h-40">
+                {/* 2nd Place Bar (Left) */}
+                {topThree[1] && (
+                  <motion.div 
+                    layout
+                    className="flex flex-col items-center gap-1.5 flex-1"
+                  >
+                    <span className="text-[8px] font-black text-slate-300 tracking-tight text-center truncate w-20" title={topThree[1].roll_number}>
+                      {topThree[1].roll_number}
+                    </span>
+                    <motion.div 
+                      initial={{ height: 0 }} 
+                      animate={{ height: 50 }} 
+                      className="w-full bg-gradient-to-t from-slate-600/30 to-slate-400/50 border border-slate-400/40 rounded-t-xl flex flex-col justify-end items-center pb-2 shadow-[0_0_10px_rgba(148,163,184,0.05)]"
+                    >
+                      <span className="text-[10px] font-black text-slate-300">2nd</span>
+                    </motion.div>
+                    <span className="text-[8px] font-black text-slate-400">{topThree[1].totalCredits} Cr</span>
+                  </motion.div>
+                )}
+
+                {/* 1st Place Bar (Middle) */}
+                {topThree[0] && (
+                  <motion.div 
+                    layout
+                    className="flex flex-col items-center gap-1.5 flex-1"
+                  >
+                    <span className="text-[9px] font-black text-yellow-400 tracking-tight text-center truncate w-20" title={topThree[0].roll_number}>
+                      🏆 {topThree[0].roll_number}
+                    </span>
+                    <motion.div 
+                      initial={{ height: 0 }} 
+                      animate={{ height: 75 }} 
+                      className="w-full bg-gradient-to-t from-yellow-600/30 to-yellow-400/60 border border-yellow-400/40 rounded-t-xl flex flex-col justify-end items-center pb-2 shadow-[0_0_15px_rgba(250,204,21,0.1)]"
+                    >
+                      <span className="text-[11px] font-black text-yellow-400">1st</span>
+                    </motion.div>
+                    <span className="text-[8px] font-black text-yellow-500">{topThree[0].totalCredits} Cr</span>
+                  </motion.div>
+                )}
+
+                {/* 3rd Place Bar (Right) */}
+                {topThree[2] && (
+                  <motion.div 
+                    layout
+                    className="flex flex-col items-center gap-1.5 flex-1"
+                  >
+                    <span className="text-[8px] font-black text-amber-500 tracking-tight text-center truncate w-20" title={topThree[2].roll_number}>
+                      {topThree[2].roll_number}
+                    </span>
+                    <motion.div 
+                      initial={{ height: 0 }} 
+                      animate={{ height: 35 }} 
+                      className="w-full bg-gradient-to-t from-amber-800/30 to-amber-600/50 border border-amber-600/40 rounded-t-xl flex flex-col justify-end items-center pb-2 shadow-[0_0_10px_rgba(217,119,6,0.05)]"
+                    >
+                      <span className="text-[9px] font-black text-amber-500">3rd</span>
+                    </motion.div>
+                    <span className="text-[8px] font-black text-amber-500/80">{topThree[2].totalCredits} Cr</span>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* Active Assessments Section */}
           <section className="space-y-6">
             <div className="flex items-center justify-between">
@@ -404,6 +557,26 @@ export default function StudentDashboard() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Real-time Rank Shift Notification Overlay */}
+      <AnimatePresence>
+        {showRankNotification && (
+          <motion.div 
+            initial={{ opacity: 0, y: -50, scale: 0.9 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: -20, scale: 0.9 }} 
+            className="fixed top-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm p-4 rounded-2xl bg-gradient-to-r from-yellow-500/20 via-amber-500/20 to-red-500/20 border border-yellow-500/30 backdrop-blur-xl shadow-2xl flex items-center gap-4 text-white"
+          >
+            <div className="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center text-yellow-400 shrink-0">
+              <Trophy className="w-5 h-5 animate-bounce" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-xs font-black uppercase tracking-wider text-yellow-400">Leaderboard Update</h4>
+              <p className="text-xs font-medium text-white/90 mt-0.5 leading-relaxed">{notificationText}</p>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
