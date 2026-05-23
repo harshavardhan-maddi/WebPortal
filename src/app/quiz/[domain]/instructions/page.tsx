@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Clock, AlertCircle, CheckCircle2, Monitor } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function InstructionsPage() {
   const { domain } = useParams();
@@ -12,26 +13,67 @@ export default function InstructionsPage() {
   const [student, setStudent] = useState<any>(null);
   const [activeQuiz, setActiveQuiz] = useState<any>(null);
   const [isPermissionLoading, setIsPermissionLoading] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasSpecialAccess, setHasSpecialAccess] = useState(false);
 
   useEffect(() => {
     const session = localStorage.getItem("student_session");
     if (!session) {
       router.push("/quiz/auth");
       return;
-    } 
-    setStudent(JSON.parse(session));
+    }
+    const studentData = JSON.parse(session);
+    setStudent(studentData);
 
-    // Get the specific quiz ID from URL
     const params = new URLSearchParams(window.location.search);
     const quizId = params.get("quizId");
 
-    // Load quiz details to show in instructions
-    const globalQuizzes = JSON.parse(localStorage.getItem("global_quizzes") || "[]");
-    const found = globalQuizzes.find((q: any) => q.id === quizId);
-    if (found) {
-      setActiveQuiz(found);
+    if (!quizId) {
+      router.push(`/quiz/${domain}/dashboard`);
+      return;
     }
-  }, [router]);
+
+    async function loadQuizData() {
+      setIsLoading(true);
+      try {
+        // 1. Fetch Quiz from Supabase
+        const { data: quiz, error: qError } = await supabase
+          .from("quizzes")
+          .select("*")
+          .eq("id", quizId)
+          .single();
+
+        if (qError) throw qError;
+        setActiveQuiz(quiz);
+
+        // 2. Fetch Result for this student
+        const { data: results, error: rError } = await supabase
+          .from("results")
+          .select("*")
+          .eq("quiz_id", quizId)
+          .eq("roll_number", studentData.rollNumber);
+
+        if (rError) throw rError;
+
+        // Check for special access or reattempt approval
+        const specialAccess = results?.find(r => r.score === -1 || r.score === -2);
+        const hasAccess = !!specialAccess;
+        setHasSpecialAccess(hasAccess);
+
+        const quizEndTime = new Date(`${quiz.date}T${quiz.end_time || '23:59:59'}`);
+        const expired = quizEndTime < new Date() && !hasAccess;
+        setIsExpired(expired);
+
+      } catch (err) {
+        console.error("Error loading quiz data in instructions:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadQuizData();
+  }, [router, domain]);
 
   const startQuiz = async () => {
     setIsPermissionLoading(true);
@@ -61,7 +103,13 @@ export default function InstructionsPage() {
     }
   };
 
-  if (!student) return null;
+  if (!student || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#050505] text-white">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-32 pb-20 px-6 flex items-center justify-center">
@@ -135,23 +183,43 @@ export default function InstructionsPage() {
           </div>
         </div>
 
-        <Button 
-          onClick={startQuiz} 
-          disabled={isPermissionLoading}
-          className="w-full h-16 rounded-2xl text-xl font-bold shadow-xl shadow-primary/20 group"
-        >
-          {isPermissionLoading ? (
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Requesting Camera Access...
+        {isExpired ? (
+          <div className="space-y-6">
+            <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-4">
+              <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto animate-pulse" />
+              <div className="space-y-1">
+                <h3 className="text-xl font-bold text-amber-500">Assessment Access Restricted</h3>
+                <p className="text-sm text-muted-foreground max-w-lg mx-auto leading-relaxed">
+                  This assessment has expired. Since you did not attempt this test during the scheduled window, you must submit a valid justification reason from your dashboard to request a re-attempt.
+                </p>
+              </div>
             </div>
-          ) : (
-            <>
-              Enter Fullscreen & Start Quiz
-              <Monitor className="ml-3 w-6 h-6 group-hover:scale-110 transition-transform" />
-            </>
-          )}
-        </Button>
+            <Button 
+              onClick={() => router.push(`/quiz/${domain}/dashboard`)}
+              className="w-full h-16 rounded-2xl text-xl font-bold bg-amber-600 hover:bg-amber-500 shadow-xl shadow-amber-500/20 text-white"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        ) : (
+          <Button 
+            onClick={startQuiz} 
+            disabled={isPermissionLoading}
+            className="w-full h-16 rounded-2xl text-xl font-bold shadow-xl shadow-primary/20 group text-white"
+          >
+            {isPermissionLoading ? (
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Requesting Camera Access...
+              </div>
+            ) : (
+              <>
+                Enter Fullscreen & Start Quiz
+                <Monitor className="ml-3 w-6 h-6 group-hover:scale-110 transition-transform" />
+              </>
+            )}
+          </Button>
+        )}
       </motion.div>
     </div>
   );

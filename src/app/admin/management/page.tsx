@@ -398,6 +398,72 @@ export default function AdminManagementPage() {
     XLSX.writeFile(workbook, `${quizTitle}_Report.xlsx`);
   };
 
+  const downloadLeaderboardExcel = () => {
+    if (leaderboardData.length === 0) {
+      alert("No leaderboard data available to download.");
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    // Group leaderboard data by domain
+    const domains = Array.from(new Set(leaderboardData.map(s => s.domain || 'general')));
+
+    domains.forEach(domain => {
+      const domainStudents = leaderboardData.filter(s => (s.domain || 'general') === domain);
+      
+      const sheetData = domainStudents.map((s, idx) => ({
+        "Rank": idx + 1,
+        "Roll Number": s.roll_number,
+        "Name": s.name || `Student ${s.roll_number}`,
+        "Domain": domain.replace('-', ' ').toUpperCase(),
+        "Batch": s.batch || selectedBatch,
+        "Total Credits (Correct Answers)": s.totalCredits,
+        "Tests Completed": s.testsAttempted,
+        "Average Accuracy %": `${s.averageAccuracy}%`
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(sheetData);
+      
+      // Auto-size columns
+      const maxWidths = Object.keys(sheetData[0] || {}).map(key => {
+        return Math.max(
+          key.length,
+          ...sheetData.map(row => String(row[key as keyof typeof row] || '').length)
+        );
+      });
+      worksheet['!cols'] = maxWidths.map(w => ({ wch: w + 2 }));
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, domain.replace('-', ' ').toUpperCase().slice(0, 31));
+    });
+
+    // Also append a "Consolidated" sheet with all domains
+    const consolidatedData = leaderboardData.map((s, idx) => ({
+      "Rank": idx + 1,
+      "Roll Number": s.roll_number,
+      "Name": s.name || `Student ${s.roll_number}`,
+      "Domain": s.domain.replace('-', ' ').toUpperCase(),
+      "Batch": s.batch || selectedBatch,
+      "Total Credits (Correct Answers)": s.totalCredits,
+      "Tests Completed": s.testsAttempted,
+      "Average Accuracy %": `${s.averageAccuracy}%`
+    }));
+
+    if (consolidatedData.length > 0) {
+      const consolidatedWorksheet = XLSX.utils.json_to_sheet(consolidatedData);
+      const maxWidths = Object.keys(consolidatedData[0] || {}).map(key => {
+        return Math.max(
+          key.length,
+          ...consolidatedData.map(row => String(row[key as keyof typeof row] || '').length)
+        );
+      });
+      consolidatedWorksheet['!cols'] = maxWidths.map(w => ({ wch: w + 2 }));
+      XLSX.utils.book_append_sheet(workbook, consolidatedWorksheet, "CONSOLIDATED RANKINGS");
+    }
+
+    XLSX.writeFile(workbook, `Leaderboard_${selectedBatch.replace(/\s+/g, '_')}_Report.xlsx`);
+  };
+
 
   const getStudentScoreForQuiz = (rollNumber: string, quizId: string) => {
     const result = results.find(r => r.roll_number === rollNumber && r.quiz_id === quizId);
@@ -613,41 +679,18 @@ export default function AdminManagementPage() {
                                           <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
                                           <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
                                         </div>
-                                        <Button 
-                                          variant="ghost" 
-                                          onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
-                                          className="h-10 w-10 p-0 text-red-400 hover:bg-red-400/10 rounded-xl"
-                                          title="Revoke Access"
-                                        >
-                                          <XCircle className="w-5 h-5" />
-                                        </Button>
                                       </div>
                                     ) : (
-                                      <>
-                                        <div className="text-right">
-                                          <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                          <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                                        </div>
-                                        <Button 
-                                          variant="ghost" 
-                                          onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
-                                          className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
-                                          title="Reset Attempt"
-                                        >
-                                          <RotateCcw className="w-5 h-5" />
-                                        </Button>
-                                      </>
+                                      <div className="text-right">
+                                        <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                        <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                                      </div>
                                     )
                                   ) : (
                                     selectedQuizForGrades && (
-                                      <Button 
-                                        variant="ghost" 
-                                        onClick={(e) => { e.stopPropagation(); grantSpecialAccess(student.roll_number, selectedQuizForGrades); }}
-                                        className="h-10 w-10 p-0 text-primary hover:bg-primary/10 rounded-xl border border-primary/20"
-                                        title="Grant Special Access"
-                                      >
-                                        <Clock className="w-5 h-5" />
-                                      </Button>
+                                      <div className="text-right">
+                                        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>
+                                      </div>
                                     )
                                   )}
                                 <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
@@ -684,41 +727,18 @@ export default function AdminManagementPage() {
                                   <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
                                   <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
                                 </div>
-                                <Button 
-                                  variant="ghost" 
-                                  onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
-                                  className="h-10 w-10 p-0 text-red-400 hover:bg-red-400/10 rounded-xl"
-                                  title="Revoke Access"
-                                >
-                                  <XCircle className="w-5 h-5" />
-                                </Button>
                               </div>
                             ) : (
-                              <>
-                                <div className="text-right">
-                                  <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                  <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  onClick={(e) => { e.stopPropagation(); deleteResultByRollAndQuiz(student.roll_number, selectedQuizForGrades!); }}
-                                  className="h-10 w-10 p-0 text-orange-400 hover:bg-orange-400/10 rounded-xl"
-                                  title="Reset Attempt"
-                                >
-                                  <RotateCcw className="w-5 h-5" />
-                                </Button>
-                              </>
+                              <div className="text-right">
+                                <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                              </div>
                             )
                           ) : (
                             selectedQuizForGrades && (
-                              <Button 
-                                variant="ghost" 
-                                onClick={(e) => { e.stopPropagation(); grantSpecialAccess(student.roll_number, selectedQuizForGrades); }}
-                                className="h-10 w-10 p-0 text-primary hover:bg-primary/10 rounded-xl border border-primary/20"
-                                title="Grant Special Access"
-                              >
-                                <Clock className="w-5 h-5" />
-                              </Button>
+                              <div className="text-right">
+                                <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>
+                              </div>
                             )
                           )}
                           <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
@@ -878,8 +898,16 @@ export default function AdminManagementPage() {
                     Rankings are determined by total credits (sum of correct answers across all attempted assessments).
                   </p>
                 </div>
-                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-primary shrink-0 px-4 py-2">
-                  Total Ranked: {leaderboardData.length}
+                <div className="flex flex-col sm:flex-row items-center gap-4 shrink-0">
+                  <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-primary px-4 py-2">
+                    Total Ranked: {leaderboardData.length}
+                  </div>
+                  <Button 
+                    onClick={downloadLeaderboardExcel}
+                    className="h-12 rounded-2xl px-6 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all font-black text-xs flex items-center gap-2 text-white"
+                  >
+                    <Download className="w-4 h-4 text-emerald-400 group-hover:text-white" /> Download Excel
+                  </Button>
                 </div>
               </div>
 

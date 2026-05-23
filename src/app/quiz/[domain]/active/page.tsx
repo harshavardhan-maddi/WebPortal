@@ -168,6 +168,15 @@ export default function ActiveQuizPage() {
 
       if (qError) throw qError;
 
+      const quizEndTime = new Date(`${quizData.date}T${quizData.end_time || '23:59:59'}`);
+      const isExpired = quizEndTime < new Date();
+
+      if (isExpired && !authorizedReattempt && !specialAccess) {
+        setError("This assessment has expired. You must request a re-attempt justification from your Dashboard to start.");
+        setIsLoading(false);
+        return;
+      }
+
       // 3. Create an "Incomplete" entry immediately to lock the attempt
       // If the student closes the browser now, they won't be able to re-enter.
       const { data: newResult, error: rError } = await supabase
