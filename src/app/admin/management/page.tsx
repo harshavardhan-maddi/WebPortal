@@ -63,6 +63,11 @@ export default function AdminManagementPage() {
   const [adminSession, setAdminSession] = useState<any>(null);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<string>("3rd Year Super 50");
+  const [isManualMarksModalOpen, setIsManualMarksModalOpen] = useState(false);
+  const [overrideRollNumber, setOverrideRollNumber] = useState("");
+  const [overrideQuizId, setOverrideQuizId] = useState("");
+  const [overrideMarks, setOverrideMarks] = useState<number | "">("");
+  const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
 
 
   const availableDomains = [
@@ -470,6 +475,90 @@ export default function AdminManagementPage() {
     return result ? result.score : null;
   };
 
+  const handleSaveManualMarks = async () => {
+    if (!overrideRollNumber || !overrideQuizId || overrideMarks === "") {
+      alert("Please fill in all fields.");
+      return;
+    }
+    const marks = Number(overrideMarks);
+    if (marks < 0 || marks > 100) {
+      alert("Marks must be between 0 and 100.");
+      return;
+    }
+
+    setIsSubmittingOverride(true);
+    try {
+      // 1. Fetch existing result for the selected student and quiz
+      const { data: existingResult, error: fetchError } = await supabase
+        .from('results')
+        .select('*')
+        .eq('roll_number', overrideRollNumber)
+        .eq('quiz_id', overrideQuizId)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      // 2. Validate: can only override score if it is 0 or 1
+      if (existingResult) {
+        if (existingResult.score !== 0 && existingResult.score !== 1) {
+          alert(`You can only give scores to tests where the student scored 0% or 1%. This student has a score of ${existingResult.score}%.`);
+          setIsSubmittingOverride(false);
+          return;
+        }
+
+        // Update existing row
+        const correctCount = Math.round((marks / 100) * (existingResult.total || 10));
+        const { error: updateError } = await supabase
+          .from('results')
+          .update({
+            score: marks,
+            correct: correctCount,
+            incorrect: (existingResult.total || 10) - correctCount,
+            timestamp: new Date().toISOString()
+          })
+          .eq('id', existingResult.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // No result exists yet: treat as unattempted (score 0), and insert new record
+        const student = students.find(s => s.roll_number === overrideRollNumber);
+        const quiz = quizzes.find(q => q.id === overrideQuizId);
+        const totalQuestions = quiz?.questions?.length || 10;
+        const correctCount = Math.round((marks / 100) * totalQuestions);
+
+        const { error: insertError } = await supabase
+          .from('results')
+          .insert([{
+            quiz_id: overrideQuizId,
+            domain: student?.domain || 'general',
+            batch: quiz?.batch || selectedBatch,
+            roll_number: overrideRollNumber,
+            score: marks,
+            correct: correctCount,
+            incorrect: totalQuestions - correctCount,
+            total: totalQuestions,
+            time_taken: 0
+          }]);
+
+        if (insertError) throw insertError;
+      }
+
+      alert("Student marks successfully overridden!");
+      setIsManualMarksModalOpen(false);
+      setOverrideRollNumber("");
+      setOverrideQuizId("");
+      setOverrideMarks("");
+
+      // Re-fetch all data to sync rankings & listings
+      await fetchAllData(adminSession, selectedBatch);
+    } catch (err: any) {
+      console.error("Failed to override marks:", err);
+      alert(`Error overriding marks: ${err.message}`);
+    } finally {
+      setIsSubmittingOverride(false);
+    }
+  };
+
   const filteredStudents = students.filter(s => 
     s.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) && 
     (selectedDomain ? s.domain === selectedDomain : true)
@@ -521,7 +610,22 @@ export default function AdminManagementPage() {
 
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-8">
+    <div className="min-h-screen bg-[#050505] text-white p-8 relative">
+      {adminSession?.role === "super-admin" && (
+        <button 
+          onClick={() => {
+            setOverrideRollNumber("");
+            setOverrideQuizId("");
+            setOverrideMarks("");
+            setIsManualMarksModalOpen(true);
+          }}
+          className="absolute top-4 right-4 p-2 rounded-lg text-white/0 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-300 z-50 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest cursor-pointer group"
+          title="Manual Override"
+        >
+          <ShieldAlert className="w-3.5 h-3.5 text-white/0 group-hover:text-red-500 transition-colors" /> 
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity">Override</span>
+        </button>
+      )}
       <div className="max-w-6xl mx-auto space-y-10">
         
         {/* Header */}
@@ -1135,6 +1239,108 @@ export default function AdminManagementPage() {
                     <Button variant="ghost" onClick={() => setIsBulkModalOpen(false)} className="flex-1 h-14 rounded-2xl font-bold">Cancel</Button>
                     <Button onClick={handleBulkImport} className="flex-1 h-14 rounded-2xl font-bold bg-primary shadow-lg shadow-primary/20">
                       Import {bulkRollNumbers.split(/[\n,]/).filter(r => r.trim()).length} Students
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Manual Marks Override Modal */}
+        <AnimatePresence>
+          {isManualMarksModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                onClick={() => setIsManualMarksModalOpen(false)} 
+                className="absolute inset-0 bg-black/90 backdrop-blur-md" 
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                className="relative w-full max-w-md glass p-10 rounded-[2.5rem] border border-white/10 shadow-2xl space-y-6"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500">
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-white">Override Student Marks</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Super Admin manual entry override</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Select Roll Number */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Select Roll Number</Label>
+                    <select 
+                      value={overrideRollNumber} 
+                      onChange={(e) => setOverrideRollNumber(e.target.value)}
+                      className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm font-bold outline-none cursor-pointer text-white"
+                    >
+                      <option value="" className="bg-[#050505] text-muted-foreground">-- Choose Roll Number --</option>
+                      {students.map(s => (
+                        <option key={s.id} value={s.roll_number} className="bg-[#050505] text-white">
+                          {s.roll_number} - {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Select Quiz */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Select Assessment</Label>
+                    <select 
+                      value={overrideQuizId} 
+                      onChange={(e) => setOverrideQuizId(e.target.value)}
+                      className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm font-bold outline-none cursor-pointer text-white"
+                    >
+                      <option value="" className="bg-[#050505] text-muted-foreground">-- Choose Quiz --</option>
+                      {quizzes.map(q => (
+                        <option key={q.id} value={q.id} className="bg-[#050505] text-white">
+                          {q.title} ({q.batch})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Enter Marks */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Enter Marks (%)</Label>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 85" 
+                      value={overrideMarks} 
+                      onChange={(e) => setOverrideMarks(e.target.value === "" ? "" : Number(e.target.value))} 
+                      className="h-12 bg-white/5 border-white/10 rounded-xl text-white font-bold" 
+                      min={0}
+                      max={100}
+                    />
+                  </div>
+
+                  {/* Submit buttons */}
+                  <div className="pt-4 flex gap-4">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setIsManualMarksModalOpen(false)} 
+                      className="flex-1 h-12 rounded-xl font-bold text-white hover:bg-white/10"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSaveManualMarks} 
+                      disabled={isSubmittingOverride}
+                      className="flex-1 h-12 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/20"
+                    >
+                      {isSubmittingOverride ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        "Save Override"
+                      )}
                     </Button>
                   </div>
                 </div>
