@@ -362,36 +362,36 @@ export default function StudentDashboard() {
             <motion.div 
               initial={{ opacity: 0, y: -20 }} 
               animate={{ opacity: 1, y: 0 }}
-              className="w-full max-w-sm glass border border-white/10 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden flex flex-col gap-4 self-start"
+              className="w-full max-w-[240px] glass border border-white/10 rounded-2xl p-4 shadow-2xl relative overflow-hidden flex flex-col gap-2 self-start"
             >
               {/* Notification Header */}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Live Batch Rankings</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Live Rankings</span>
                 </div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">{student.batch}</span>
+                <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground">{student.batch?.replace("Super 50", "S50")}</span>
               </div>
 
               {/* 3D-effect Podium Bar Graph */}
-              <div className="flex items-end justify-center gap-4 pt-6 pb-2 h-40">
+              <div className="flex items-end justify-center gap-2 pt-4 pb-1 h-24">
                 {/* 2nd Place Bar (Left) */}
                 {topThree[1] && (
                   <motion.div 
                     layout
-                    className="flex flex-col items-center gap-1.5 flex-1"
+                    className="flex flex-col items-center gap-1 flex-1"
                   >
-                    <span className="text-[8px] font-black text-slate-300 tracking-tight text-center truncate w-20" title={topThree[1].roll_number}>
-                      {topThree[1].roll_number}
+                    <span className="text-[7px] font-black text-slate-300 tracking-tight text-center truncate w-14" title={topThree[1].roll_number}>
+                      {topThree[1].roll_number.slice(-4)}
                     </span>
                     <motion.div 
                       initial={{ height: 0 }} 
-                      animate={{ height: 50 }} 
-                      className="w-full bg-gradient-to-t from-slate-600/30 to-slate-400/50 border border-slate-400/40 rounded-t-xl flex flex-col justify-end items-center pb-2 shadow-[0_0_10px_rgba(148,163,184,0.05)]"
+                      animate={{ height: 32 }} 
+                      className="w-full bg-gradient-to-t from-slate-600/30 to-slate-400/50 border border-slate-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(148,163,184,0.05)]"
                     >
-                      <span className="text-[10px] font-black text-slate-300">2nd</span>
+                      <span className="text-[8px] font-black text-slate-300">2nd</span>
                     </motion.div>
-                    <span className="text-[8px] font-black text-slate-400">{topThree[1].totalCredits} Cr</span>
+                    <span className="text-[7px] font-black text-slate-400">{topThree[1].totalCredits} Cr</span>
                   </motion.div>
                 )}
 
@@ -399,19 +399,19 @@ export default function StudentDashboard() {
                 {topThree[0] && (
                   <motion.div 
                     layout
-                    className="flex flex-col items-center gap-1.5 flex-1"
+                    className="flex flex-col items-center gap-1 flex-1"
                   >
-                    <span className="text-[9px] font-black text-yellow-400 tracking-tight text-center truncate w-20" title={topThree[0].roll_number}>
-                      🏆 {topThree[0].roll_number}
+                    <span className="text-[8px] font-black text-yellow-400 tracking-tight text-center truncate w-16" title={topThree[0].roll_number}>
+                      🏆 {topThree[0].roll_number.slice(-4)}
                     </span>
                     <motion.div 
                       initial={{ height: 0 }} 
-                      animate={{ height: 75 }} 
-                      className="w-full bg-gradient-to-t from-yellow-600/30 to-yellow-400/60 border border-yellow-400/40 rounded-t-xl flex flex-col justify-end items-center pb-2 shadow-[0_0_15px_rgba(250,204,21,0.1)]"
+                      animate={{ height: 48 }} 
+                      className="w-full bg-gradient-to-t from-yellow-600/30 to-yellow-400/60 border border-yellow-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_15px_rgba(250,204,21,0.1)]"
                     >
-                      <span className="text-[11px] font-black text-yellow-400">1st</span>
+                      <span className="text-[9px] font-black text-yellow-400">1st</span>
                     </motion.div>
-                    <span className="text-[8px] font-black text-yellow-500">{topThree[0].totalCredits} Cr</span>
+                    <span className="text-[7px] font-black text-yellow-500">{topThree[0].totalCredits} Cr</span>
                   </motion.div>
                 )}
 
@@ -419,19 +419,19 @@ export default function StudentDashboard() {
                 {topThree[2] && (
                   <motion.div 
                     layout
-                    className="flex flex-col items-center gap-1.5 flex-1"
+                    className="flex flex-col items-center gap-1 flex-1"
                   >
-                    <span className="text-[8px] font-black text-amber-500 tracking-tight text-center truncate w-20" title={topThree[2].roll_number}>
-                      {topThree[2].roll_number}
+                    <span className="text-[7px] font-black text-amber-500 tracking-tight text-center truncate w-14" title={topThree[2].roll_number}>
+                      {topThree[2].roll_number.slice(-4)}
                     </span>
                     <motion.div 
                       initial={{ height: 0 }} 
-                      animate={{ height: 35 }} 
-                      className="w-full bg-gradient-to-t from-amber-800/30 to-amber-600/50 border border-amber-600/40 rounded-t-xl flex flex-col justify-end items-center pb-2 shadow-[0_0_10px_rgba(217,119,6,0.05)]"
+                      animate={{ height: 20 }} 
+                      className="w-full bg-gradient-to-t from-amber-800/30 to-amber-600/50 border border-amber-600/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(217,119,6,0.05)]"
                     >
-                      <span className="text-[9px] font-black text-amber-500">3rd</span>
+                      <span className="text-[8px] font-black text-amber-500">3rd</span>
                     </motion.div>
-                    <span className="text-[8px] font-black text-amber-500/80">{topThree[2].totalCredits} Cr</span>
+                    <span className="text-[7px] font-black text-amber-500/80">{topThree[2].totalCredits} Cr</span>
                   </motion.div>
                 )}
               </div>

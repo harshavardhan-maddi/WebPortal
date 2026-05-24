@@ -67,6 +67,7 @@ export default function AdminManagementPage() {
   const [overrideRollNumber, setOverrideRollNumber] = useState("");
   const [overrideQuizId, setOverrideQuizId] = useState("");
   const [overrideMarks, setOverrideMarks] = useState<number | "">("");
+  const [overrideSearchQuery, setOverrideSearchQuery] = useState("");
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
 
 
@@ -498,14 +499,8 @@ export default function AdminManagementPage() {
 
       if (fetchError) throw fetchError;
 
-      // 2. Validate: can only override score if it is 0 or 1
+      // 2. Update or Insert
       if (existingResult) {
-        if (existingResult.score !== 0 && existingResult.score !== 1) {
-          alert(`You can only give scores to tests where the student scored 0% or 1%. This student has a score of ${existingResult.score}%.`);
-          setIsSubmittingOverride(false);
-          return;
-        }
-
         // Update existing row
         const correctCount = Math.round((marks / 100) * (existingResult.total || 10));
         const { error: updateError } = await supabase
@@ -546,6 +541,7 @@ export default function AdminManagementPage() {
       alert("Student marks successfully overridden!");
       setIsManualMarksModalOpen(false);
       setOverrideRollNumber("");
+      setOverrideSearchQuery("");
       setOverrideQuizId("");
       setOverrideMarks("");
 
@@ -1274,21 +1270,64 @@ export default function AdminManagementPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Select Roll Number */}
+                  {/* Select Roll Number Search */}
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Select Roll Number</Label>
-                    <select 
-                      value={overrideRollNumber} 
-                      onChange={(e) => setOverrideRollNumber(e.target.value)}
-                      className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm font-bold outline-none cursor-pointer text-white"
-                    >
-                      <option value="" className="bg-[#050505] text-muted-foreground">-- Choose Roll Number --</option>
-                      {students.map(s => (
-                        <option key={s.id} value={s.roll_number} className="bg-[#050505] text-white">
-                          {s.roll_number} - {s.name}
-                        </option>
-                      ))}
-                    </select>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Select Student</Label>
+                    {overrideRollNumber ? (
+                      <div className="flex items-center justify-between p-3.5 bg-primary/10 border border-primary/20 rounded-xl">
+                        <div>
+                          <p className="text-sm font-black text-white">{overrideRollNumber}</p>
+                          <p className="text-[10px] text-muted-foreground font-medium">
+                            {students.find(s => s.roll_number === overrideRollNumber)?.name || "Selected Student"}
+                          </p>
+                        </div>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          onClick={() => {
+                            setOverrideRollNumber("");
+                            setOverrideSearchQuery("");
+                          }}
+                          className="h-8 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg px-3"
+                        >
+                          Change
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 relative">
+                        <Input 
+                          placeholder="Search by Roll Number..." 
+                          value={overrideSearchQuery}
+                          onChange={(e) => setOverrideSearchQuery(e.target.value.toUpperCase())}
+                          className="h-12 bg-white/5 border-white/10 rounded-xl text-white font-bold"
+                        />
+                        {overrideSearchQuery && (
+                          <div className="absolute left-0 right-0 mt-1 bg-[#0f0f0f] border border-white/10 rounded-xl p-2 z-50 max-h-48 overflow-y-auto shadow-2xl space-y-1">
+                            {students.filter(s => s.roll_number.toLowerCase().includes(overrideSearchQuery.toLowerCase())).length > 0 ? (
+                              students.filter(s => s.roll_number.toLowerCase().includes(overrideSearchQuery.toLowerCase())).slice(0, 5).map(s => (
+                                <button
+                                  type="button"
+                                  key={s.id}
+                                  onClick={() => {
+                                    setOverrideRollNumber(s.roll_number);
+                                    setOverrideSearchQuery(s.roll_number);
+                                  }}
+                                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-primary/20 hover:text-white transition-all text-xs font-bold flex items-center justify-between group"
+                                >
+                                  <div>
+                                    <span className="text-white">{s.roll_number}</span>
+                                    <span className="text-muted-foreground ml-2">({s.name})</span>
+                                  </div>
+                                  <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Click to select</span>
+                                </button>
+                              ))
+                            ) : (
+                              <p className="text-xs text-red-400 font-bold p-2 text-center">No student exists</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Select Quiz */}
