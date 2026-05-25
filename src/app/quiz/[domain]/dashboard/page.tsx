@@ -394,6 +394,12 @@ export default function StudentDashboard() {
   const speedometerMax = 10000;
   const speedometerPercent = Math.min(speedometerScore / speedometerMax, 1);
   const needleRotation = (speedometerPercent * 180) - 90;
+  const speedometerColor = (() => {
+    if (speedometerScore <= 2500) return "#ffffff";
+    if (speedometerScore <= 5000) return "#ef4444";
+    if (speedometerScore <= 7500) return "#f97316";
+    return "#10b981";
+  })();
 
   // 4. Leaderboard selections
   const overallTopThree = allStudentRankings.filter(r => r.totalCredits > 0).slice(0, 3);
@@ -407,15 +413,28 @@ export default function StudentDashboard() {
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   const chartDataPoints = sortedQuizResults.map((r, index) => {
-    const score = r.score;
+    const credits = r.correct || 0;
     const dateStr = new Date(r.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const quizTitle = r.quizzes?.title || "Assessment";
     return {
-      score,
+      credits,
       date: dateStr,
       title: quizTitle
     };
   });
+
+  const maxChartCredits = Math.max(...chartDataPoints.map(p => p.credits), 10);
+
+  // 6. Total Portal Time Spent
+  const totalPortalTimeSpent = allResults.reduce((sum, r) => sum + (r.time_taken || 0), 0);
+  const formatPortalTime = (totalSecs: number) => {
+    const hours = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  };
 
   return (
     <div className="min-h-screen pt-32 pb-20 px-6">
@@ -468,95 +487,34 @@ export default function StudentDashboard() {
               exit={{ opacity: 0, y: -15 }}
               transition={{ duration: 0.25 }}
               className="space-y-12"
-            >
-              {/* Live Batch Rankings Podium */}
-              {topThree.length > 0 && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -20 }} 
-                  animate={{ opacity: 1, y: 0 }}
-                  className="w-full max-w-[240px] glass border border-white/10 rounded-2xl p-4 shadow-2xl relative overflow-hidden flex flex-col gap-2 self-start"
-                >
-                  {/* Notification Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Live Rankings</span>
-                    </div>
-                    <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground">{student.batch?.replace("Super 50", "S50")}</span>
+            >              {/* Portal Stats Bar */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                <div className="glass p-6 rounded-[2rem] border border-white/10 flex items-center justify-between shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
+                  <div>
+                    <h3 className="text-xs font-black text-muted-foreground uppercase tracking-widest">Total Time Spent in Portal</h3>
+                    <p className="text-3xl font-black text-white mt-2">
+                      {formatPortalTime(totalPortalTimeSpent)}
+                    </p>
                   </div>
-
-                  {/* 3D-effect Podium Bar Graph */}
-                  <div className="flex items-end justify-center gap-2 pt-4 pb-1 h-24">
-                    {/* 2nd Place Bar (Left) */}
-                    {topThree[1] && (
-                      <motion.div 
-                        layout
-                        className="flex flex-col items-center gap-1 flex-1"
-                      >
-                        <span className="text-[7px] font-black text-slate-300 tracking-tight text-center truncate w-14" title={topThree[1].roll_number}>
-                          {topThree[1].roll_number.slice(-4)}
-                        </span>
-                        <motion.div 
-                          initial={{ height: 0 }} 
-                          animate={{ height: 32 }} 
-                          className="w-full bg-gradient-to-t from-slate-600/30 to-slate-400/50 border border-slate-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(148,163,184,0.05)]"
-                        >
-                          <span className="text-[8px] font-black text-slate-300">2nd</span>
-                        </motion.div>
-                        <span className="text-[7px] font-black text-slate-400">{topThree[1].totalCredits} Cr</span>
-                      </motion.div>
-                    )}
-
-                    {/* 1st Place Bar (Middle) */}
-                    {topThree[0] && (
-                      <motion.div 
-                        layout
-                        className="flex flex-col items-center gap-1 flex-1"
-                      >
-                        <span className="text-[8px] font-black text-yellow-400 tracking-tight text-center truncate w-16" title={topThree[0].roll_number}>
-                          🏆 {topThree[0].roll_number.slice(-4)}
-                        </span>
-                        <motion.div 
-                          initial={{ height: 0 }} 
-                          animate={{ height: 48 }} 
-                          className="w-full bg-gradient-to-t from-yellow-600/30 to-yellow-400/60 border border-yellow-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_15px_rgba(250,204,21,0.1)]"
-                        >
-                          <span className="text-[9px] font-black text-yellow-400">1st</span>
-                        </motion.div>
-                        <span className="text-[7px] font-black text-yellow-500">{topThree[0].totalCredits} Cr</span>
-                      </motion.div>
-                    )}
-
-                    {/* 3rd Place Bar (Right) */}
-                    {topThree[2] && (
-                      <motion.div 
-                        layout
-                        className="flex flex-col items-center gap-1 flex-1"
-                      >
-                        <span className="text-[7px] font-black text-amber-500 tracking-tight text-center truncate w-14" title={topThree[2].roll_number}>
-                          {topThree[2].roll_number.slice(-4)}
-                        </span>
-                        <motion.div 
-                          initial={{ height: 0 }} 
-                          animate={{ height: 20 }} 
-                          className="w-full bg-gradient-to-t from-amber-800/30 to-amber-600/50 border border-amber-600/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(217,119,6,0.05)]"
-                        >
-                          <span className="text-[8px] font-black text-amber-500">3rd</span>
-                        </motion.div>
-                        <span className="text-[7px] font-black text-amber-500/80">{topThree[2].totalCredits} Cr</span>
-                      </motion.div>
-                    )}
+                  <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/20 flex items-center justify-center text-primary">
+                    <Clock className="w-6 h-6" />
                   </div>
+                </div>
 
-                  {/* My Rank & Position inside Live Rankings */}
-                  <div className="border-t border-white/5 pt-2 mt-1 flex items-center justify-between">
-                    <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground">Your Rank</span>
-                    <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
-                      #{myRank || "-"} ({myCredits} Cr)
-                    </span>
+                <div className="glass p-6 rounded-[2rem] border border-white/10 flex items-center justify-between shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+                  <div>
+                    <h3 className="text-xs font-black text-muted-foreground uppercase tracking-widest">Assessments Completed</h3>
+                    <p className="text-3xl font-black text-white mt-2">
+                      {completedQuizzes.length} Completed
+                    </p>
                   </div>
-                </motion.div>
-              )}
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
 
               {/* Active Assessments Section */}
               <section className="space-y-6">
@@ -660,21 +618,13 @@ export default function StudentDashboard() {
                   <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
                   
                   <div>
-                    <h3 className="text-lg font-black text-white/90 tracking-wide mb-1 uppercase text-xs">Overall Score Speedometer</h3>
-                    <p className="text-xs text-muted-foreground">Speedometer showing your credits scaled to 10,000 max score</p>
+                    <h3 className="text-lg font-black text-white/90 tracking-wide mb-1 uppercase text-xs">Credits</h3>
+                    <p className="text-xs text-muted-foreground">Real-time accumulated credits speedometer</p>
                   </div>
 
                   <div className="flex flex-col items-center justify-center py-2 relative">
                     {/* SVG Gauge */}
                     <svg className="w-48 h-28" viewBox="0 0 200 110">
-                      <defs>
-                        <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#ef4444" /> {/* Red */}
-                          <stop offset="35%" stopColor="#f59e0b" /> {/* Amber */}
-                          <stop offset="70%" stopColor="#3b82f6" /> {/* Blue */}
-                          <stop offset="100%" stopColor="#10b981" /> {/* Emerald */}
-                        </linearGradient>
-                      </defs>
                       {/* Background arc */}
                       <path
                         d="M 20 100 A 80 80 0 0 1 180 100"
@@ -683,11 +633,11 @@ export default function StudentDashboard() {
                         strokeWidth="14"
                         strokeLinecap="round"
                       />
-                      {/* Foreground arc (gradient) */}
+                      {/* Foreground arc using dynamic color based on credits range */}
                       <path
                         d="M 20 100 A 80 80 0 0 1 180 100"
                         fill="none"
-                        stroke="url(#gauge-grad)"
+                        stroke={speedometerColor}
                         strokeWidth="14"
                         strokeLinecap="round"
                         strokeDasharray="251"
@@ -701,7 +651,7 @@ export default function StudentDashboard() {
                           y1="0"
                           x2="0"
                           y2="-75"
-                          stroke="#ffffff"
+                          stroke={speedometerColor}
                           strokeWidth="3"
                           strokeLinecap="round"
                           style={{
@@ -711,19 +661,19 @@ export default function StudentDashboard() {
                           }}
                         />
                         <circle cx="0" cy="0" r="6" fill="#ffffff" />
-                        <circle cx="0" cy="0" r="3" fill="#10b981" />
+                        <circle cx="0" cy="0" r="3" fill={speedometerColor} />
                       </g>
                     </svg>
 
                     <div className="absolute bottom-1 flex flex-col items-center">
                       <span className="text-xl font-black text-white">{speedometerScore.toLocaleString()}</span>
-                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">/ {speedometerMax.toLocaleString()} Score</span>
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">/ {speedometerMax.toLocaleString()} Credits</span>
                     </div>
                   </div>
 
                   <div className="border-t border-white/5 pt-4 flex items-center justify-between">
                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Your Credits</span>
-                    <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                    <span className="text-xs font-black bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20" style={{ color: speedometerColor, borderColor: `${speedometerColor}33` }}>
                       {myCredits} Credits
                     </span>
                   </div>
@@ -825,7 +775,7 @@ export default function StudentDashboard() {
                         Chronological Trend
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">Interactive score graph mapping your progress over scheduled exams.</p>
+                    <p className="text-xs text-muted-foreground mt-2">Interactive credits graph mapping your progress over scheduled exams.</p>
                   </div>
 
                   <div className="py-6 flex items-center justify-center min-h-[220px]">
@@ -842,7 +792,7 @@ export default function StudentDashboard() {
                           >
                             <p className="text-[9px] text-primary uppercase tracking-wider">{hoveredPoint.date}</p>
                             <p className="text-white truncate max-w-[130px]">{hoveredPoint.title}</p>
-                            <p className="text-emerald-400 text-xs mt-0.5">Score: {hoveredPoint.score}%</p>
+                            <p className="text-emerald-400 text-xs mt-0.5">Credits: {hoveredPoint.credits} Cr</p>
                           </div>
                         )}
 
@@ -867,9 +817,9 @@ export default function StudentDashboard() {
                           <line x1="50" y1="200" x2="460" y2="200" stroke="rgba(255,255,255,0.08)" />
 
                           {/* Graph Axes Labels */}
-                          <text x="45" y="55" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">100%</text>
-                          <text x="45" y="130" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">50%</text>
-                          <text x="45" y="205" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">0%</text>
+                          <text x="45" y="55" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">{maxChartCredits} Cr</text>
+                          <text x="45" y="130" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">{Math.round(maxChartCredits / 2)} Cr</text>
+                          <text x="45" y="205" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">0 Cr</text>
 
                           {/* Plot lines */}
                           {(() => {
@@ -877,7 +827,7 @@ export default function StudentDashboard() {
                             let fillD = "";
                             const points = chartDataPoints.map((item, idx) => {
                               const x = chartDataPoints.length > 1 ? (idx / (chartDataPoints.length - 1)) * 410 + 50 : 250;
-                              const y = 200 - (item.score / 100) * 150;
+                              const y = 200 - (item.credits / maxChartCredits) * 150;
                               return { x, y, ...item };
                             });
 
@@ -949,7 +899,7 @@ export default function StudentDashboard() {
                   </div>
 
                   <div className="border-t border-white/5 pt-4 flex items-center justify-between text-[10px] text-muted-foreground font-medium">
-                    <span>* Hover over data points to check exam name and percentage</span>
+                    <span>* Hover over data points to check exam name and credits</span>
                     <span>Total Exams Mapped: {chartDataPoints.length}</span>
                   </div>
                 </div>
@@ -1115,6 +1065,18 @@ function QuizCard({ quiz, isCompleted, onStart, onReattempt, currentTime }: { qu
                 <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Percentage</p>
                 <p className="text-2xl font-black text-primary">
                   {result.score}%
+                </p>
+              </div>
+              <div className="h-10 w-[1px] bg-white/10" />
+              <div className="text-right">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Time Spent</p>
+                <p className="text-2xl font-black text-amber-400">
+                  {(() => {
+                    const totalSecs = result.time_taken || 0;
+                    const mins = Math.floor(totalSecs / 60);
+                    const secs = totalSecs % 60;
+                    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                  })()}
                 </p>
               </div>
               {result.score === 0 && onReattempt && (
