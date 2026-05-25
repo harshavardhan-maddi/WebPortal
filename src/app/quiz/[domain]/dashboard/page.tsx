@@ -119,7 +119,7 @@ export default function StudentDashboard() {
 
       const { data: results, error: rError } = await supabase
         .from('results')
-        .select('*')
+        .select('*, quizzes(*)')
         .eq('roll_number', studentData.rollNumber);
 
       if (rError) throw rError;
@@ -390,7 +390,7 @@ export default function StudentDashboard() {
   const testsAttemptedCount = allResults.filter(r => r.score !== -1 && r.score !== -2).length;
 
   // 3. Speedometer values
-  const speedometerScore = myCredits * 100;
+  const speedometerScore = myCredits;
   const speedometerMax = 10000;
   const speedometerPercent = Math.min(speedometerScore / speedometerMax, 1);
   const needleRotation = (speedometerPercent * 180) - 90;
@@ -407,23 +407,27 @@ export default function StudentDashboard() {
   const filteredRankings = allStudentRankings.filter(r => !isThirdYear || r.domain === domain);
   const topTenRankings = filteredRankings.slice(0, 10);
 
-  // 5. SVG Chart data points
-  const sortedQuizResults = [...allResults]
-    .filter(r => r.score !== -1 && r.score !== -2 && r.quizzes)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  // 5. SVG Chart data points (computed directly from processed quizzes)
+  const getChartDataPoints = () => {
+    let runningTotal = 0;
+    return allQuizzes
+      .filter((q: any) => q.result && q.result.score !== -1 && q.result.score !== -2)
+      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map((q: any) => {
+        const credits = q.result.correct || 0;
+        runningTotal += credits;
+        const dateStr = new Date(q.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return {
+          credits,
+          cumulativeCredits: runningTotal,
+          date: dateStr,
+          title: q.title
+        };
+      });
+  };
 
-  const chartDataPoints = sortedQuizResults.map((r, index) => {
-    const credits = r.correct || 0;
-    const dateStr = new Date(r.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const quizTitle = r.quizzes?.title || "Assessment";
-    return {
-      credits,
-      date: dateStr,
-      title: quizTitle
-    };
-  });
-
-  const maxChartCredits = Math.max(...chartDataPoints.map(p => p.credits), 10);
+  const chartDataPoints = getChartDataPoints();
+  const maxChartCredits = Math.max(...chartDataPoints.map(p => p.cumulativeCredits), 10);
 
   // 6. Total Portal Time Spent
   const totalPortalTimeSpent = allResults.reduce((sum, r) => sum + (r.time_taken || 0), 0);
@@ -791,8 +795,9 @@ export default function StudentDashboard() {
                             }}
                           >
                             <p className="text-[9px] text-primary uppercase tracking-wider">{hoveredPoint.date}</p>
-                            <p className="text-white truncate max-w-[130px]">{hoveredPoint.title}</p>
-                            <p className="text-emerald-400 text-xs mt-0.5">Credits: {hoveredPoint.credits} Cr</p>
+                            <p className="text-white truncate max-w-[130px] font-black">{hoveredPoint.title}</p>
+                            <p className="text-emerald-400 text-[10px] font-black mt-0.5">Test Credits: {hoveredPoint.credits} Cr</p>
+                            <p className="text-amber-400 text-[10px] font-black">Total Credits: {hoveredPoint.cumulativeCredits} Cr</p>
                           </div>
                         )}
 
@@ -827,7 +832,7 @@ export default function StudentDashboard() {
                             let fillD = "";
                             const points = chartDataPoints.map((item, idx) => {
                               const x = chartDataPoints.length > 1 ? (idx / (chartDataPoints.length - 1)) * 410 + 50 : 250;
-                              const y = 200 - (item.credits / maxChartCredits) * 150;
+                              const y = 200 - (item.cumulativeCredits / maxChartCredits) * 150;
                               return { x, y, ...item };
                             });
 
