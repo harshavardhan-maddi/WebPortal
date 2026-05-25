@@ -18,7 +18,9 @@ import {
   ChevronRight,
   TrendingUp,
   Trophy,
-  ShieldAlert
+  ShieldAlert,
+  Flame,
+  Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
@@ -41,6 +43,11 @@ export default function StudentDashboard() {
   const [topThree, setTopThree] = useState<any[]>([]);
   const [showRankNotification, setShowRankNotification] = useState(false);
   const [notificationText, setNotificationText] = useState("");
+  const [activeTab, setActiveTab] = useState<"assessments" | "reports">("assessments");
+  const [allStudentRankings, setAllStudentRankings] = useState<any[]>([]);
+  const [myRank, setMyRank] = useState<number | null>(null);
+  const [myCredits, setMyCredits] = useState<number>(0);
+  const [hoveredPoint, setHoveredPoint] = useState<any>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -158,16 +165,30 @@ export default function StudentDashboard() {
           .neq('score', -1)
           .neq('score', -2);
 
-        if (batchResults) {
+         if (batchResults) {
           const studentCredits = batchStudents.map(s => {
             const sResults = batchResults.filter(r => r.roll_number === s.roll_number);
             const totalCredits = sResults.reduce((sum, r) => sum + (r.correct || 0), 0);
             return {
               roll_number: s.roll_number,
               name: s.name,
+              domain: s.domain,
               totalCredits
             };
           });
+
+          // Sort descending for full ranking and save to state
+          const fullRankings = [...studentCredits].sort((a, b) => b.totalCredits - a.totalCredits);
+          setAllStudentRankings(fullRankings);
+
+          const myIndex = fullRankings.findIndex(r => r.roll_number === studentData.rollNumber);
+          if (myIndex !== -1) {
+            setMyRank(myIndex + 1);
+            setMyCredits(fullRankings[myIndex].totalCredits);
+          } else {
+            setMyRank(null);
+            setMyCredits(0);
+          }
 
           // Sort descending and get top 3
           const sortedRankings = studentCredits
@@ -332,6 +353,70 @@ export default function StudentDashboard() {
     );
   }
 
+  // 1. Streak calculation
+  const computedStreak = (() => {
+    if (!allResults || allResults.length === 0) return 0;
+    const attemptDates = Array.from(new Set(
+      allResults
+        .filter(r => r.timestamp && r.score !== -1 && r.score !== -2)
+        .map(r => r.timestamp.split('T')[0])
+    )).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+    if (attemptDates.length === 0) return 0;
+
+    let streak = 0;
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    const lastAttemptDate = attemptDates[0];
+    if (lastAttemptDate !== today && lastAttemptDate !== yesterday) {
+      return 0;
+    }
+
+    let currentDate = new Date(lastAttemptDate);
+    for (let i = 0; i < attemptDates.length; i++) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      if (attemptDates.includes(dateStr)) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return streak;
+  })();
+
+  // 2. Tests attempted count
+  const testsAttemptedCount = allResults.filter(r => r.score !== -1 && r.score !== -2).length;
+
+  // 3. Speedometer values
+  const speedometerScore = myCredits * 100;
+  const speedometerMax = 10000;
+  const speedometerPercent = Math.min(speedometerScore / speedometerMax, 1);
+  const needleRotation = (speedometerPercent * 180) - 90;
+
+  // 4. Leaderboard selections
+  const overallTopThree = allStudentRankings.filter(r => r.totalCredits > 0).slice(0, 3);
+  const isThirdYear = student.batch?.toLowerCase().includes("3rd");
+  const filteredRankings = allStudentRankings.filter(r => !isThirdYear || r.domain === domain);
+  const topTenRankings = filteredRankings.slice(0, 10);
+
+  // 5. SVG Chart data points
+  const sortedQuizResults = [...allResults]
+    .filter(r => r.score !== -1 && r.score !== -2 && r.quizzes)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  const chartDataPoints = sortedQuizResults.map((r, index) => {
+    const score = r.score;
+    const dateStr = new Date(r.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const quizTitle = r.quizzes?.title || "Assessment";
+    return {
+      score,
+      date: dateStr,
+      title: quizTitle
+    };
+  });
+
   return (
     <div className="min-h-screen pt-32 pb-20 px-6">
       <div className="max-w-4xl mx-auto space-y-10">
@@ -340,15 +425,33 @@ export default function StudentDashboard() {
             <h1 className="text-4xl font-bold">Welcome, <span className="cyber-text">{student.name}</span></h1>
             <p className="text-muted-foreground mt-2">Roll Number: {student.rollNumber} | Domain: <span className="capitalize">{domain?.toString().replace('-', ' ')}</span></p>
           </motion.div>
-          <div className="flex gap-4">
-            <div className="glass px-4 py-2 rounded-xl border border-white/5 flex items-center gap-2">
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="bg-white/5 p-1.5 rounded-2xl border border-white/10 flex items-center shadow-xl">
+              <button
+                onClick={() => setActiveTab("assessments")}
+                className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  activeTab === "assessments" ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+                }`}
+              >
+                Assessments
+              </button>
+              <button
+                onClick={() => setActiveTab("reports")}
+                className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  activeTab === "reports" ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white'
+                }`}
+              >
+                Reports
+              </button>
+            </div>
+            <div className="glass px-4 py-2.5 rounded-xl border border-white/5 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</span>
             </div>
             <Button 
               variant="glass" 
               onClick={() => router.push(`/quiz/${domain}/profile`)}
-              className="rounded-xl border-white/5 gap-2 font-bold"
+              className="rounded-xl border-white/5 gap-2 font-bold h-[42px]"
             >
               <User className="w-4 h-4 text-primary" />
               Profile
@@ -356,141 +459,504 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        <div className="space-y-12">
-          {/* Live Batch Rankings Podium */}
-          {topThree.length > 0 && (
-            <motion.div 
-              initial={{ opacity: 0, y: -20 }} 
+        <AnimatePresence mode="wait">
+          {activeTab === "assessments" ? (
+            <motion.div
+              key="assessments"
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              className="w-full max-w-[240px] glass border border-white/10 rounded-2xl p-4 shadow-2xl relative overflow-hidden flex flex-col gap-2 self-start"
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-12"
             >
-              {/* Notification Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Live Rankings</span>
+              {/* Live Batch Rankings Podium */}
+              {topThree.length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -20 }} 
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full max-w-[240px] glass border border-white/10 rounded-2xl p-4 shadow-2xl relative overflow-hidden flex flex-col gap-2 self-start"
+                >
+                  {/* Notification Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Live Rankings</span>
+                    </div>
+                    <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground">{student.batch?.replace("Super 50", "S50")}</span>
+                  </div>
+
+                  {/* 3D-effect Podium Bar Graph */}
+                  <div className="flex items-end justify-center gap-2 pt-4 pb-1 h-24">
+                    {/* 2nd Place Bar (Left) */}
+                    {topThree[1] && (
+                      <motion.div 
+                        layout
+                        className="flex flex-col items-center gap-1 flex-1"
+                      >
+                        <span className="text-[7px] font-black text-slate-300 tracking-tight text-center truncate w-14" title={topThree[1].roll_number}>
+                          {topThree[1].roll_number.slice(-4)}
+                        </span>
+                        <motion.div 
+                          initial={{ height: 0 }} 
+                          animate={{ height: 32 }} 
+                          className="w-full bg-gradient-to-t from-slate-600/30 to-slate-400/50 border border-slate-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(148,163,184,0.05)]"
+                        >
+                          <span className="text-[8px] font-black text-slate-300">2nd</span>
+                        </motion.div>
+                        <span className="text-[7px] font-black text-slate-400">{topThree[1].totalCredits} Cr</span>
+                      </motion.div>
+                    )}
+
+                    {/* 1st Place Bar (Middle) */}
+                    {topThree[0] && (
+                      <motion.div 
+                        layout
+                        className="flex flex-col items-center gap-1 flex-1"
+                      >
+                        <span className="text-[8px] font-black text-yellow-400 tracking-tight text-center truncate w-16" title={topThree[0].roll_number}>
+                          🏆 {topThree[0].roll_number.slice(-4)}
+                        </span>
+                        <motion.div 
+                          initial={{ height: 0 }} 
+                          animate={{ height: 48 }} 
+                          className="w-full bg-gradient-to-t from-yellow-600/30 to-yellow-400/60 border border-yellow-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_15px_rgba(250,204,21,0.1)]"
+                        >
+                          <span className="text-[9px] font-black text-yellow-400">1st</span>
+                        </motion.div>
+                        <span className="text-[7px] font-black text-yellow-500">{topThree[0].totalCredits} Cr</span>
+                      </motion.div>
+                    )}
+
+                    {/* 3rd Place Bar (Right) */}
+                    {topThree[2] && (
+                      <motion.div 
+                        layout
+                        className="flex flex-col items-center gap-1 flex-1"
+                      >
+                        <span className="text-[7px] font-black text-amber-500 tracking-tight text-center truncate w-14" title={topThree[2].roll_number}>
+                          {topThree[2].roll_number.slice(-4)}
+                        </span>
+                        <motion.div 
+                          initial={{ height: 0 }} 
+                          animate={{ height: 20 }} 
+                          className="w-full bg-gradient-to-t from-amber-800/30 to-amber-600/50 border border-amber-600/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(217,119,6,0.05)]"
+                        >
+                          <span className="text-[8px] font-black text-amber-500">3rd</span>
+                        </motion.div>
+                        <span className="text-[7px] font-black text-amber-500/80">{topThree[2].totalCredits} Cr</span>
+                      </motion.div>
+                    )}
+                  </div>
+
+                  {/* My Rank & Position inside Live Rankings */}
+                  <div className="border-t border-white/5 pt-2 mt-1 flex items-center justify-between">
+                    <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground">Your Rank</span>
+                    <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                      #{myRank || "-"} ({myCredits} Cr)
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Active Assessments Section */}
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-black flex items-center gap-3">
+                      <PlayCircle className="w-6 h-6 text-primary" /> Active Assessments
+                    </h2>
+                    <div className="px-4 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-widest">
+                        Available Now
+                    </div>
                 </div>
-                <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground">{student.batch?.replace("Super 50", "S50")}</span>
+                <div className="grid gap-4">
+                  {allQuizzes.filter(q => !q.isExpired && !completedQuizzes.includes(q.id)).map((quiz) => (
+                    <QuizCard 
+                      key={quiz.id} 
+                      quiz={quiz} 
+                      currentTime={currentTime}
+                      isCompleted={false}
+                      onStart={() => handleStartQuiz(quiz.id)}
+                      onReattempt={() => handleOpenReattemptModal(quiz)}
+                    />
+                  ))}
+                  {allQuizzes.filter(q => !q.isExpired && !completedQuizzes.includes(q.id)).length === 0 && (
+                    <div className="glass p-10 rounded-[2.5rem] border border-white/5 text-center text-muted-foreground font-medium italic">
+                      No active assessments at the moment.
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Performance & History Section */}
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-black flex items-center gap-3 text-emerald-400">
+                      <TrendingUp className="w-6 h-6" /> Assessment History
+                    </h2>
+                    <div className="px-4 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/20 text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                        Performance Track
+                    </div>
+                </div>
+                <div className="grid gap-4">
+                  {allQuizzes.filter(q => completedQuizzes.includes(q.id) || q.isExpired).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((quiz) => (
+                    <QuizCard 
+                      key={quiz.id} 
+                      quiz={quiz} 
+                      currentTime={currentTime}
+                      isCompleted={completedQuizzes.includes(quiz.id)}
+                      onStart={() => handleStartQuiz(quiz.id)}
+                      onReattempt={() => handleOpenReattemptModal(quiz)}
+                    />
+                  ))}
+                </div>
+              </section>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="reports"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-10"
+            >
+              {/* Reports Dashboard Top Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                {/* Left Card: Streak & Assessments Attempted */}
+                <div className="glass p-6 rounded-[2rem] border border-white/10 flex flex-col justify-between shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+                  
+                  <div>
+                    <h3 className="text-lg font-black text-white/90 tracking-wide mb-1 uppercase text-xs">Performance Streak</h3>
+                    <p className="text-xs text-muted-foreground">Keep completing quizzes daily to keep the fire burning!</p>
+                  </div>
+
+                  <div className="flex items-center gap-6 py-6">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 relative">
+                      <Flame className="w-9 h-9" />
+                      {computedStreak > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-4xl font-black text-white">{computedStreak} Days</div>
+                      <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Current Active Streak</div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/5 pt-4 flex items-center justify-between">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Tests Attempted</span>
+                    <span className="text-xs font-black text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                      {testsAttemptedCount} Assessments
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right Card: Speedometer Gauge */}
+                <div className="glass p-6 rounded-[2rem] border border-white/10 flex flex-col justify-between shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+                  
+                  <div>
+                    <h3 className="text-lg font-black text-white/90 tracking-wide mb-1 uppercase text-xs">Overall Score Speedometer</h3>
+                    <p className="text-xs text-muted-foreground">Speedometer showing your credits scaled to 10,000 max score</p>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center py-2 relative">
+                    {/* SVG Gauge */}
+                    <svg className="w-48 h-28" viewBox="0 0 200 110">
+                      <defs>
+                        <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#ef4444" /> {/* Red */}
+                          <stop offset="35%" stopColor="#f59e0b" /> {/* Amber */}
+                          <stop offset="70%" stopColor="#3b82f6" /> {/* Blue */}
+                          <stop offset="100%" stopColor="#10b981" /> {/* Emerald */}
+                        </linearGradient>
+                      </defs>
+                      {/* Background arc */}
+                      <path
+                        d="M 20 100 A 80 80 0 0 1 180 100"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.05)"
+                        strokeWidth="14"
+                        strokeLinecap="round"
+                      />
+                      {/* Foreground arc (gradient) */}
+                      <path
+                        d="M 20 100 A 80 80 0 0 1 180 100"
+                        fill="none"
+                        stroke="url(#gauge-grad)"
+                        strokeWidth="14"
+                        strokeLinecap="round"
+                        strokeDasharray="251"
+                        strokeDashoffset={251 - (251 * speedometerPercent)}
+                        className="transition-all duration-1000 ease-out"
+                      />
+                      {/* Speedometer Needle */}
+                      <g transform="translate(100, 100)">
+                        <line
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="-75"
+                          stroke="#ffffff"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          style={{
+                            transform: `rotate(${needleRotation}deg)`,
+                            transformOrigin: "center bottom",
+                            transition: "transform 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)"
+                          }}
+                        />
+                        <circle cx="0" cy="0" r="6" fill="#ffffff" />
+                        <circle cx="0" cy="0" r="3" fill="#10b981" />
+                      </g>
+                    </svg>
+
+                    <div className="absolute bottom-1 flex flex-col items-center">
+                      <span className="text-xl font-black text-white">{speedometerScore.toLocaleString()}</span>
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">/ {speedometerMax.toLocaleString()} Score</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/5 pt-4 flex items-center justify-between">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Your Credits</span>
+                    <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                      {myCredits} Credits
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              {/* 3D-effect Podium Bar Graph */}
-              <div className="flex items-end justify-center gap-2 pt-4 pb-1 h-24">
-                {/* 2nd Place Bar (Left) */}
-                {topThree[1] && (
-                  <motion.div 
-                    layout
-                    className="flex flex-col items-center gap-1 flex-1"
-                  >
-                    <span className="text-[7px] font-black text-slate-300 tracking-tight text-center truncate w-14" title={topThree[1].roll_number}>
-                      {topThree[1].roll_number.slice(-4)}
-                    </span>
-                    <motion.div 
-                      initial={{ height: 0 }} 
-                      animate={{ height: 32 }} 
-                      className="w-full bg-gradient-to-t from-slate-600/30 to-slate-400/50 border border-slate-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(148,163,184,0.05)]"
-                    >
-                      <span className="text-[8px] font-black text-slate-300">2nd</span>
-                    </motion.div>
-                    <span className="text-[7px] font-black text-slate-400">{topThree[1].totalCredits} Cr</span>
-                  </motion.div>
-                )}
+              {/* Reports Dashboard Bottom Grid (Rankings vs SVG Chart) */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 text-left">
+                {/* Left Panel: Rankings & Top 10 lists (2 cols width) */}
+                <div className="lg:col-span-2 space-y-6 flex flex-col">
+                  {/* Top 3 & My Rank card */}
+                  <div className="glass p-6 rounded-[2rem] border border-white/10 shadow-2xl flex-grow flex flex-col gap-4">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 border-b border-white/5 pb-3">
+                      <Trophy className="w-4 h-4 text-yellow-500" /> Batch Podium (Top 3)
+                    </h3>
+                    
+                    <div className="space-y-2">
+                      {overallTopThree.map((item, index) => (
+                        <div key={item.roll_number} className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+                          <div className="flex items-center gap-2.5">
+                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black ${
+                              index === 0 ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                              index === 1 ? 'bg-slate-400/20 text-slate-300 border border-slate-400/30' :
+                              'bg-amber-600/20 text-amber-500 border border-amber-600/30'
+                            }`}>
+                              {index + 1}
+                            </span>
+                            <span className="text-xs font-black text-white">{item.roll_number}</span>
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">({item.name})</span>
+                          </div>
+                          <span className="text-xs font-black text-muted-foreground">{item.totalCredits} Cr</span>
+                        </div>
+                      ))}
+                      {overallTopThree.length === 0 && (
+                        <p className="text-xs italic text-muted-foreground text-center py-2">No rankings available yet.</p>
+                      )}
+                    </div>
 
-                {/* 1st Place Bar (Middle) */}
-                {topThree[0] && (
-                  <motion.div 
-                    layout
-                    className="flex flex-col items-center gap-1 flex-1"
-                  >
-                    <span className="text-[8px] font-black text-yellow-400 tracking-tight text-center truncate w-16" title={topThree[0].roll_number}>
-                      🏆 {topThree[0].roll_number.slice(-4)}
-                    </span>
-                    <motion.div 
-                      initial={{ height: 0 }} 
-                      animate={{ height: 48 }} 
-                      className="w-full bg-gradient-to-t from-yellow-600/30 to-yellow-400/60 border border-yellow-400/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_15px_rgba(250,204,21,0.1)]"
-                    >
-                      <span className="text-[9px] font-black text-yellow-400">1st</span>
-                    </motion.div>
-                    <span className="text-[7px] font-black text-yellow-500">{topThree[0].totalCredits} Cr</span>
-                  </motion.div>
-                )}
+                    {/* Personal Placement Details Card */}
+                    <div className="mt-auto p-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-between">
+                      <div>
+                        <div className="text-[9px] font-black text-primary uppercase tracking-widest">Your Position</div>
+                        <div className="text-sm font-black text-white mt-0.5">#{myRank || "-"} In Batch</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] font-black text-primary uppercase tracking-widest">Your Score</div>
+                        <div className="text-sm font-black text-white mt-0.5">{myCredits} Credits</div>
+                      </div>
+                    </div>
+                  </div>
 
-                {/* 3rd Place Bar (Right) */}
-                {topThree[2] && (
-                  <motion.div 
-                    layout
-                    className="flex flex-col items-center gap-1 flex-1"
-                  >
-                    <span className="text-[7px] font-black text-amber-500 tracking-tight text-center truncate w-14" title={topThree[2].roll_number}>
-                      {topThree[2].roll_number.slice(-4)}
-                    </span>
-                    <motion.div 
-                      initial={{ height: 0 }} 
-                      animate={{ height: 20 }} 
-                      className="w-full bg-gradient-to-t from-amber-800/30 to-amber-600/50 border border-amber-600/40 rounded-t-lg flex flex-col justify-end items-center pb-1 shadow-[0_0_10px_rgba(217,119,6,0.05)]"
-                    >
-                      <span className="text-[8px] font-black text-amber-500">3rd</span>
-                    </motion.div>
-                    <span className="text-[7px] font-black text-amber-500/80">{topThree[2].totalCredits} Cr</span>
-                  </motion.div>
-                )}
+                  {/* Top 10 List Card */}
+                  <div className="glass p-6 rounded-[2rem] border border-white/10 shadow-2xl flex-grow flex flex-col gap-4">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 border-b border-white/5 pb-3">
+                      <Zap className="w-4 h-4 text-primary" /> {isThirdYear ? `${domain?.toString().replace('-', ' ').toUpperCase()} Top 10` : 'Overall Top 10'}
+                    </h3>
+
+                    <div className="space-y-1.5 overflow-y-auto max-h-[280px] pr-1">
+                      {topTenRankings.map((item, idx) => {
+                        const isMe = item.roll_number === student.rollNumber;
+                        return (
+                          <div 
+                            key={item.roll_number} 
+                            className={`flex items-center justify-between p-2.5 rounded-xl transition-all ${
+                              isMe ? 'bg-primary/20 border border-primary/30 shadow-lg' : 'bg-white/5 border border-white/5 hover:bg-white/10'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-black ${
+                                isMe ? 'bg-primary text-white' : 'bg-white/10 text-muted-foreground'
+                              }`}>
+                                {idx + 1}
+                              </span>
+                              <span className={`text-xs font-black ${isMe ? 'text-white' : 'text-white/80'}`}>{item.roll_number}</span>
+                              <span className="text-[9px] text-muted-foreground truncate max-w-[80px]">({item.name})</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-white/90">{item.totalCredits} Cr</span>
+                              {isMe && <span className="text-[8px] bg-primary text-white px-1.5 py-0.5 rounded font-black uppercase">You</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {topTenRankings.length === 0 && (
+                        <p className="text-xs italic text-muted-foreground text-center py-4">No rankings available yet.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Panel: SVG Performance Line Chart (3 cols width) */}
+                <div className="lg:col-span-3 glass p-6 rounded-[2rem] border border-white/10 shadow-2xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-emerald-400" /> Assessment Analytics
+                      </h3>
+                      <span className="text-[10px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
+                        Chronological Trend
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">Interactive score graph mapping your progress over scheduled exams.</p>
+                  </div>
+
+                  <div className="py-6 flex items-center justify-center min-h-[220px]">
+                    {chartDataPoints.length > 0 ? (
+                      <div className="w-full relative">
+                        {/* Interactive Tooltip Card overlay inside graph container */}
+                        {hoveredPoint && (
+                          <div 
+                            className="absolute bg-[#0b0c16]/95 border border-white/10 rounded-xl p-3 shadow-2xl z-50 text-xs font-black space-y-1 transition-all duration-200 pointer-events-none"
+                            style={{
+                              left: `${Math.min(Math.max(hoveredPoint.x - 60, 10), 320)}px`,
+                              top: `${Math.max(hoveredPoint.y - 75, 5)}px`
+                            }}
+                          >
+                            <p className="text-[9px] text-primary uppercase tracking-wider">{hoveredPoint.date}</p>
+                            <p className="text-white truncate max-w-[130px]">{hoveredPoint.title}</p>
+                            <p className="text-emerald-400 text-xs mt-0.5">Score: {hoveredPoint.score}%</p>
+                          </div>
+                        )}
+
+                        <svg className="w-full h-auto" viewBox="0 0 500 250">
+                          <defs>
+                            {/* Area Gradient */}
+                            <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                              <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                            </linearGradient>
+                            {/* Line Gradient */}
+                            <linearGradient id="line-grad" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#6366f1" />
+                              <stop offset="50%" stopColor="#10b981" />
+                              <stop offset="100%" stopColor="#06b6d4" />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Grid Lines */}
+                          <line x1="50" y1="50" x2="460" y2="50" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                          <line x1="50" y1="125" x2="460" y2="125" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                          <line x1="50" y1="200" x2="460" y2="200" stroke="rgba(255,255,255,0.08)" />
+
+                          {/* Graph Axes Labels */}
+                          <text x="45" y="55" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">100%</text>
+                          <text x="45" y="130" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">50%</text>
+                          <text x="45" y="205" fill="rgba(255,255,255,0.4)" fontSize="8" fontWeight="bold" textAnchor="end">0%</text>
+
+                          {/* Plot lines */}
+                          {(() => {
+                            let pathD = "";
+                            let fillD = "";
+                            const points = chartDataPoints.map((item, idx) => {
+                              const x = chartDataPoints.length > 1 ? (idx / (chartDataPoints.length - 1)) * 410 + 50 : 250;
+                              const y = 200 - (item.score / 100) * 150;
+                              return { x, y, ...item };
+                            });
+
+                            if (points.length > 1) {
+                              pathD = `M ${points[0].x} ${points[0].y} ` + points.slice(1).map(p => `L ${p.x} ${p.y}`).join(" ");
+                              fillD = `${pathD} L ${points[points.length - 1].x} 200 L ${points[0].x} 200 Z`;
+                            }
+
+                            return (
+                              <>
+                                {points.length > 1 && (
+                                  <>
+                                    {/* Filled area */}
+                                    <path d={fillD} fill="url(#area-grad)" />
+                                    {/* Outline line */}
+                                    <path d={pathD} fill="none" stroke="url(#line-grad)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  </>
+                                )}
+
+                                {/* Interactive hover points */}
+                                {points.map((pt, idx) => (
+                                  <g 
+                                    key={idx}
+                                    onMouseEnter={() => setHoveredPoint(pt)}
+                                    onMouseLeave={() => setHoveredPoint(null)}
+                                    className="cursor-pointer group"
+                                  >
+                                    {/* Glow Ring */}
+                                    <circle 
+                                      cx={pt.x} 
+                                      cy={pt.y} 
+                                      r="10" 
+                                      fill="transparent" 
+                                      className="group-hover:fill-primary/20 transition-all duration-200" 
+                                    />
+                                    {/* Small Point */}
+                                    <circle 
+                                      cx={pt.x} 
+                                      cy={pt.y} 
+                                      r="5.5" 
+                                      fill="#10b981" 
+                                      stroke="#ffffff" 
+                                      strokeWidth="2.5" 
+                                      className="transition-all duration-200 group-hover:scale-125"
+                                    />
+                                    {/* Date Label under chart */}
+                                    <text 
+                                      x={pt.x} 
+                                      y="225" 
+                                      fill="rgba(255,255,255,0.4)" 
+                                      fontSize="7.5" 
+                                      fontWeight="black" 
+                                      textAnchor="middle"
+                                    >
+                                      {pt.date}
+                                    </text>
+                                  </g>
+                                ))}
+                              </>
+                            );
+                          })()}
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="text-center font-medium italic text-muted-foreground text-xs py-8">
+                        No quiz scores recorded to generate graphs yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-white/5 pt-4 flex items-center justify-between text-[10px] text-muted-foreground font-medium">
+                    <span>* Hover over data points to check exam name and percentage</span>
+                    <span>Total Exams Mapped: {chartDataPoints.length}</span>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
-
-          {/* Active Assessments Section */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black flex items-center gap-3">
-                  <PlayCircle className="w-6 h-6 text-primary" /> Active Assessments
-                </h2>
-                <div className="px-4 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-widest">
-                    Available Now
-                </div>
-            </div>
-            <div className="grid gap-4">
-              {allQuizzes.filter(q => !q.isExpired && !completedQuizzes.includes(q.id)).map((quiz) => (
-                <QuizCard 
-                  key={quiz.id} 
-                  quiz={quiz} 
-                  currentTime={currentTime}
-                  isCompleted={false}
-                  onStart={() => handleStartQuiz(quiz.id)}
-                  onReattempt={() => handleOpenReattemptModal(quiz)}
-                />
-              ))}
-              {allQuizzes.filter(q => !q.isExpired && !completedQuizzes.includes(q.id)).length === 0 && (
-                <div className="glass p-10 rounded-[2.5rem] border border-white/5 text-center text-muted-foreground font-medium italic">
-                  No active assessments at the moment.
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Performance & History Section */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black flex items-center gap-3 text-emerald-400">
-                  <TrendingUp className="w-6 h-6" /> Assessment History
-                </h2>
-                <div className="px-4 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/20 text-[10px] font-black text-emerald-400 uppercase tracking-widest">
-                    Performance Track
-                </div>
-            </div>
-            <div className="grid gap-4">
-              {allQuizzes.filter(q => completedQuizzes.includes(q.id) || q.isExpired).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((quiz) => (
-                <QuizCard 
-                  key={quiz.id} 
-                  quiz={quiz} 
-                  currentTime={currentTime}
-                  isCompleted={completedQuizzes.includes(quiz.id)}
-                  onStart={() => handleStartQuiz(quiz.id)}
-                  onReattempt={() => handleOpenReattemptModal(quiz)}
-                />
-              ))}
-            </div>
-          </section>
-        </div>
+        </AnimatePresence>
       </div>
 
       {/* Re-attempt Justification Modal */}
