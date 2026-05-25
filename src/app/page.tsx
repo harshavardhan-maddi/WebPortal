@@ -11,7 +11,9 @@ import {
   ArrowRight, 
   Instagram, 
   Facebook, 
-  Globe 
+  Globe,
+  Sparkles,
+  Key
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -21,6 +23,21 @@ export default function LandingPage() {
       <div className="mesh-gradient">
         <div className="mesh-blob bg-cyan-500/10 top-[-10%] left-[-10%]" />
         <div className="mesh-blob bg-purple-500/10 bottom-[-10%] right-[-10%] delay-700" />
+      </div>
+
+      {/* Floating Header Actions (Admin Login as key emblem) */}
+      <div className="fixed top-8 right-28 md:right-36 z-50">
+        <Link href="/auth/login" title="Admin Portal Access">
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            className="w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-[#06070c]/60 border border-white/10 hover:border-primary/50 flex items-center justify-center text-muted-foreground hover:text-white shadow-2xl backdrop-blur-md cursor-pointer transition-all relative overflow-hidden group"
+          >
+            {/* Pulsing glow inside */}
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <Key className="w-5 h-5 group-hover:scale-110 group-hover:text-primary transition-transform duration-300" />
+          </motion.div>
+        </Link>
       </div>
 
       {/* Hero Section */}
@@ -40,24 +57,49 @@ export default function LandingPage() {
           
           <div className="mb-10" />
 
-          <div className="flex flex-wrap justify-center gap-6">
+          {/* Ultra Premium Center Launch Button */}
+          <div className="flex justify-center mt-6">
             <Link href="/quiz/auth">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-primary text-primary-foreground rounded-full font-semibold flex items-center gap-2 shadow-[0_0_20px_rgba(58,123,213,0.4)]"
+              <motion.div
+                className="relative inline-block group cursor-pointer"
+                whileHover="hover"
+                whileTap="tap"
               >
-                Start Quiz <ArrowRight className="w-5 h-5" />
-              </motion.button>
-            </Link>
-            <Link href="/auth/login">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 glass rounded-full font-semibold border border-white/10 hover:bg-white/10"
-              >
-                Admin Login
-              </motion.button>
+                {/* Dynamic Cyber Ambient Glow */}
+                <div className="absolute -inset-2 bg-gradient-to-r from-indigo-500 via-emerald-500 to-cyan-500 rounded-full blur-xl opacity-35 group-hover:opacity-65 group-hover:scale-105 transition duration-500" />
+                
+                {/* Premium Main Button Container */}
+                <motion.button
+                  variants={{
+                    hover: { scale: 1.05, boxShadow: "0 0 30px rgba(99, 102, 241, 0.3)" },
+                    tap: { scale: 0.96 }
+                  }}
+                  transition={{ type: "spring", stiffness: 450, damping: 14 }}
+                  className="relative px-12 py-5 bg-[#06070c]/90 text-white rounded-full font-black text-sm uppercase tracking-[0.25em] border border-white/10 overflow-hidden flex items-center justify-center gap-3 shadow-2xl backdrop-blur-md"
+                >
+                  {/* Sweep-across shine animation */}
+                  <motion.span 
+                    variants={{
+                      hover: {
+                        x: ["-120%", "220%"],
+                        transition: {
+                          repeat: Infinity,
+                          duration: 1.6,
+                          ease: "linear"
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" 
+                  />
+
+                  {/* Sparkles icon */}
+                  <Sparkles className="w-5 h-5 text-cyan-400 group-hover:rotate-12 transition-transform duration-300" />
+                  
+                  <span>Start Assessment</span>
+
+                  <ArrowRight className="w-5 h-5 text-indigo-400 group-hover:translate-x-1.5 transition-transform duration-300" />
+                </motion.button>
+              </motion.div>
             </Link>
           </div>
         </motion.div>
