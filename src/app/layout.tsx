@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { Toaster } from "@/components/ui/toaster";
 import CollegeLogo from "@/components/CollegeLogo";
+import IntroSplash from "@/components/IntroSplash";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.className} selection:bg-cyan-500/30`}>
+        <IntroSplash />
         <CollegeLogo />
         <Navbar />
         <main>{children}</main>
