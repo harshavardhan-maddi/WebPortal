@@ -46,8 +46,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Quiz Engine", icon: BookOpen, path: "/admin/quizzes" },
     { name: "Management", icon: Users, path: "/admin/management" },
     { name: "Active Status", icon: Activity, path: "/admin/active-status" },
+    { name: "Coding Challenge", icon: ShieldCheck, path: "/admin/coding-challenge" },
     { name: "Settings", icon: Settings, path: "/admin/settings" },
-
   ];
 
 

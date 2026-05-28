@@ -41,7 +41,7 @@ export default function QuizCreationPage() {
   });
 
   const [questions, setQuestions] = useState<any[]>([]);
-  const [source, setSource] = useState<"pdf" | "manual" | null>(null);
+  const [source, setSource] = useState<"pdf" | "manual" | "coding" | null>(null);
 
 
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -195,11 +195,25 @@ export default function QuizCreationPage() {
   };
 
   const addManualQuestion = () => {
-    setQuestions([...questions, {
-      text: "",
-      options: ["", "", "", ""],
-      correctAnswer: 0
-    }]);
+    if (source === "coding") {
+      setQuestions([...questions, {
+        type: "CODING",
+        text: "",
+        problemStatement: "",
+        inputFormat: "",
+        outputFormat: "",
+        sampleInput: "",
+        sampleOutput: "",
+        languages: ["javascript", "python"],
+        testCases: [{ input: "", output: "" }]
+      }]);
+    } else {
+      setQuestions([...questions, {
+        text: "",
+        options: ["", "", "", ""],
+        correctAnswer: 0
+      }]);
+    }
   };
 
   const updateQuestion = (index: number, field: string, value: any) => {
@@ -383,14 +397,38 @@ export default function QuizCreationPage() {
 
         {step === 2 && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-            <div className="grid grid-cols-2 gap-6">
-              <button onClick={() => setSource("pdf")} className={`p-8 rounded-[2.5rem] border transition-all ${source === "pdf" ? 'bg-primary/10 border-primary' : 'bg-white/5 border-white/10'}`}>
-                <FileUp className="w-8 h-8 mb-4" />
-                <h3 className="font-bold">AI PDF Extraction</h3>
+            <div className="grid grid-cols-3 gap-6">
+              <button onClick={() => setSource("pdf")} className={`p-8 rounded-[2.5rem] border transition-all ${source === "pdf" ? 'bg-primary/10 border-primary' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                <FileUp className="w-8 h-8 mb-4 text-primary" />
+                <h3 className="font-bold text-lg">AI PDF MCQ Extraction</h3>
+                <p className="text-xs text-muted-foreground mt-2">Automatically extract MCQ questions from a PDF using AI</p>
               </button>
-              <button onClick={() => { setSource("manual"); setQuestions([{ text: "", options: ["", "", "", ""], correctAnswer: 0 }]); setStep(3); }} className="p-8 rounded-[2.5rem] border border-white/10 bg-white/5">
-                <Plus className="w-8 h-8 mb-4" />
-                <h3 className="font-bold">Manual Entry</h3>
+              <button onClick={() => { setSource("manual"); setQuestions([{ text: "", options: ["", "", "", ""], correctAnswer: 0 }]); setStep(3); }} className="p-8 rounded-[2.5rem] border border-white/10 bg-white/5 hover:bg-white/10 transition-all">
+                <Plus className="w-8 h-8 mb-4 text-emerald-400" />
+                <h3 className="font-bold text-lg">Manual MCQ Entry</h3>
+                <p className="text-xs text-muted-foreground mt-2">Manually type your multiple-choice questions & answers</p>
+              </button>
+              <button 
+                onClick={() => { 
+                  setSource("coding"); 
+                  setQuestions([{ 
+                    type: "CODING",
+                    text: "",
+                    problemStatement: "",
+                    inputFormat: "",
+                    outputFormat: "",
+                    sampleInput: "",
+                    sampleOutput: "",
+                    languages: ["javascript", "python"],
+                    testCases: [{ input: "", output: "" }]
+                  }]); 
+                  setStep(3); 
+                }} 
+                className="p-8 rounded-[2.5rem] border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+              >
+                <Plus className="w-8 h-8 mb-4 text-purple-400" />
+                <h3 className="font-bold text-lg">Coding Challenge</h3>
+                <p className="text-xs text-muted-foreground mt-2">Create custom programming challenges with multiple languages</p>
               </button>
             </div>
             {source === "pdf" && (
@@ -404,22 +442,208 @@ export default function QuizCreationPage() {
 
         {step === 3 && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-            {questions.map((q, qIndex) => (
-              <div key={qIndex} className="glass p-8 rounded-[2rem] border border-white/5 space-y-4">
-                <textarea value={q.text} onChange={(e) => updateQuestion(qIndex, "text", e.target.value)} className="w-full bg-white/5 p-4 rounded-xl" />
-                <div className="grid grid-cols-2 gap-4">
-                  {q.options.map((opt: string, oIndex: number) => (
-                    <div key={oIndex} className="flex gap-2">
-                      <Input value={opt} onChange={(e) => updateQuestion(qIndex, "option", { optIndex: oIndex, text: e.target.value })} />
-                      <button onClick={() => updateQuestion(qIndex, "correctAnswer", oIndex)} className={q.correctAnswer === oIndex ? "text-primary" : ""}>✓</button>
+            {source === "coding" ? (
+              // Coding Challenge Custom UI
+              questions.map((q, qIndex) => (
+                <div key={qIndex} className="glass p-10 rounded-[3rem] border border-white/5 space-y-6 relative">
+                  <div className="flex justify-between items-center pb-4 border-b border-white/5">
+                    <h3 className="text-xl font-black text-purple-400">Coding Question #{qIndex + 1}</h3>
+                    <button 
+                      onClick={() => removeQuestion(qIndex)} 
+                      className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors"
+                      title="Remove Question"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Title / Concept Name</Label>
+                      <Input 
+                        placeholder="e.g. Sum of Two Numbers" 
+                        value={q.text} 
+                        onChange={(e) => updateQuestion(qIndex, "text", e.target.value)} 
+                        className="h-12 bg-white/5 border-white/10 rounded-xl"
+                      />
                     </div>
-                  ))}
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Problem Statement</Label>
+                      <textarea 
+                        placeholder="Describe the task, requirements, and constraints..." 
+                        value={q.problemStatement} 
+                        onChange={(e) => updateQuestion(qIndex, "problemStatement", e.target.value)} 
+                        className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:ring-1 ring-purple-400 outline-none resize-y"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Input Format</Label>
+                        <textarea 
+                          placeholder="Describe the format of standard input..." 
+                          value={q.inputFormat} 
+                          onChange={(e) => updateQuestion(qIndex, "inputFormat", e.target.value)} 
+                          className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:ring-1 ring-purple-400 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Output Format</Label>
+                        <textarea 
+                          placeholder="Describe the format of expected standard output..." 
+                          value={q.outputFormat} 
+                          onChange={(e) => updateQuestion(qIndex, "outputFormat", e.target.value)} 
+                          className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm focus:ring-1 ring-purple-400 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sample Input</Label>
+                        <textarea 
+                          placeholder="e.g. 5 10" 
+                          value={q.sampleInput} 
+                          onChange={(e) => updateQuestion(qIndex, "sampleInput", e.target.value)} 
+                          className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-4 font-mono text-sm focus:ring-1 ring-purple-400 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sample Output</Label>
+                        <textarea 
+                          placeholder="e.g. 15" 
+                          value={q.sampleOutput} 
+                          onChange={(e) => updateQuestion(qIndex, "sampleOutput", e.target.value)} 
+                          className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-4 font-mono text-sm focus:ring-1 ring-purple-400 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Allowed Programming Languages</Label>
+                      <div className="flex flex-wrap gap-4 mt-2">
+                        {["javascript", "python", "c", "cpp", "java"].map((lang) => {
+                          const isSelected = q.languages?.includes(lang);
+                          return (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => {
+                                const currentLangs = q.languages || [];
+                                const newLangs = currentLangs.includes(lang)
+                                  ? currentLangs.filter((l: string) => l !== lang)
+                                  : [...currentLangs, lang];
+                                updateQuestion(qIndex, "languages", newLangs);
+                              }}
+                              className={`px-5 py-2.5 rounded-full border text-xs font-black uppercase transition-all ${
+                                isSelected 
+                                  ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
+                                  : 'bg-white/5 border-white/10 text-muted-foreground hover:text-white'
+                              }`}
+                            >
+                              {lang === "cpp" ? "C++" : lang}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Dynamic Test Cases Block */}
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-sm font-black uppercase text-purple-400">Test Cases ({q.testCases?.length || 0})</Label>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          onClick={() => {
+                            const currentTestCases = q.testCases || [];
+                            updateQuestion(qIndex, "testCases", [...currentTestCases, { input: "", output: "" }]);
+                          }}
+                          className="h-10 rounded-xl px-4 text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500 hover:text-white transition-all font-bold"
+                        >
+                          <Plus className="w-4 h-4 mr-2" /> Add Test Case
+                        </Button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {q.testCases?.map((tc: any, tcIndex: number) => (
+                          <div key={tcIndex} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 relative group">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-bold text-muted-foreground uppercase">Test Case #{tcIndex + 1}</span>
+                              {q.testCases.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const filtered = q.testCases.filter((_: any, idx: number) => idx !== tcIndex);
+                                    updateQuestion(qIndex, "testCases", filtered);
+                                  }}
+                                  className="text-red-400 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 text-xs font-bold uppercase tracking-wider"
+                                >
+                                  Delete Case
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-muted-foreground uppercase">Inputs</Label>
+                                <textarea
+                                  placeholder="Inputs for execution..."
+                                  value={tc.input}
+                                  onChange={(e) => {
+                                    const updatedTC = [...q.testCases];
+                                    updatedTC[tcIndex].input = e.target.value;
+                                    updateQuestion(qIndex, "testCases", updatedTC);
+                                  }}
+                                  className="w-full h-16 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs focus:ring-1 ring-purple-400 outline-none"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] font-bold text-muted-foreground uppercase">Expected Output</Label>
+                                <textarea
+                                  placeholder="Expected exact stdout..."
+                                  value={tc.output}
+                                  onChange={(e) => {
+                                    const updatedTC = [...q.testCases];
+                                    updatedTC[tcIndex].output = e.target.value;
+                                    updateQuestion(qIndex, "testCases", updatedTC);
+                                  }}
+                                  className="w-full h-16 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs focus:ring-1 ring-purple-400 outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <button onClick={() => removeQuestion(qIndex)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            ))}
-            <Button onClick={addManualQuestion} variant="glass" className="w-full"><Plus className="mr-2" /> Add Question</Button>
-            <Button onClick={handleFinalSave} disabled={isUploading} className="w-full h-14 rounded-2xl">{isUploading ? "Saving..." : "Deploy Quiz"}</Button>
+              ))
+            ) : (
+              // Standard MCQ Quiz UI
+              questions.map((q, qIndex) => (
+                <div key={qIndex} className="glass p-8 rounded-[2rem] border border-white/5 space-y-4">
+                  <textarea value={q.text} onChange={(e) => updateQuestion(qIndex, "text", e.target.value)} className="w-full bg-white/5 p-4 rounded-xl" />
+                  <div className="grid grid-cols-2 gap-4">
+                    {q.options.map((opt: string, oIndex: number) => (
+                      <div key={oIndex} className="flex gap-2">
+                        <Input value={opt} onChange={(e) => updateQuestion(qIndex, "option", { optIndex: oIndex, text: e.target.value })} />
+                        <button onClick={() => updateQuestion(qIndex, "correctAnswer", oIndex)} className={q.correctAnswer === oIndex ? "text-primary" : ""}>✓</button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => removeQuestion(qIndex)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))
+            )}
+            
+            <Button onClick={addManualQuestion} variant="glass" className="w-full h-12 rounded-xl border-dashed border-white/10 hover:bg-white/5 text-sm font-bold">
+              <Plus className="mr-2" /> Add {source === "coding" ? "Coding Challenge" : "MCQ Question"}
+            </Button>
+            <Button onClick={handleFinalSave} disabled={isUploading} className="w-full h-14 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20">
+              {isUploading ? "Deploying Assessment..." : "Deploy Quiz"}
+            </Button>
           </motion.div>
         )}
 
