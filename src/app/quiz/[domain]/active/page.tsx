@@ -800,24 +800,41 @@ export default function ActiveQuizPage() {
                     <div className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#05060f]/60">
                       <div className="flex items-center gap-3">
                         <Code className="w-4 h-4 text-cyan-400" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Editor</span>
+                    <div className=\"h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#05060f]/60\">
+                      <div className=\"flex items-center gap-3\">
+                        <Code className=\"w-4 h-4 text-cyan-400\" />
+                        <span className=\"text-xs font-bold uppercase tracking-wider text-cyan-400\">Editor</span>
                       </div>
                       
                       {/* Language Selection */}
-                      <div className="flex gap-2">
+                      <div className=\"flex gap-2\">
                         {currentQuestion.languages?.map((lang: string) => {
                           const isSelected = codeAnswers[currentQuestionIndex]?.language === lang;
+                          // Retrieve stored code for this language or use template if none
+                          const storedCode = codeAnswers[currentQuestionIndex]?.codeByLang?.[lang] || CODE_TEMPLATES[lang] || '';
                           return (
                             <button
                               key={lang}
                               onClick={() => {
-                                setCodeAnswers(prev => ({
-                                  ...prev,
-                                  [currentQuestionIndex]: {
-                                    language: lang,
-                                    code: CODE_TEMPLATES[lang] || ""
-                                  }
-                                }));
+                                setCodeAnswers(prev => {
+                                  const current = prev[currentQuestionIndex] || {};
+                                  const existingCodeByLang = current.codeByLang || {};
+                                  // Preserve current code under its language before switching
+                                  const updatedCodeByLang = {
+                                    ...existingCodeByLang,
+                                    [current.language]: current.code,
+                                    [lang]: existingCodeByLang[lang] || CODE_TEMPLATES[lang] || ''
+                                  };
+                                  return {
+                                    ...prev,
+                                    [currentQuestionIndex]: {
+                                      ...current,
+                                      language: lang,
+                                      code: updatedCodeByLang[lang],
+                                      codeByLang: updatedCodeByLang
+                                    }
+                                  };
+                                });
                               }}
                               className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase transition-all ${
                                 isSelected 
@@ -825,7 +842,7 @@ export default function ActiveQuizPage() {
                                   : 'bg-white/5 border-white/5 text-muted-foreground hover:text-white'
                               }`}
                             >
-                              {lang === "cpp" ? "C++" : lang}
+                              {lang === \"cpp\" ? \"C++\" : lang}
                             </button>
                           );
                         })}

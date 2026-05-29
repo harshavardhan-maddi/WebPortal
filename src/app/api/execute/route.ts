@@ -130,38 +130,12 @@ export async function POST(req: Request) {
       // Or if there is a runtime exception.
       const isMissingCompiler = runErr.error?.message?.includes("ENOENT") || runErr.error?.code === "ENOENT";
       
+      // If compiler is missing, return explicit error instead of simulated execution
       if (isMissingCompiler) {
-        // Fallback: If C/C++/Java compilers are not installed locally, let's fall back to a dynamic mock execution!
-        // We will execute a lightweight check or return a simulated correct output for demo/testing purposes
-        // so that the Web Portal is completely fail-safe in development/deployment environments.
-        console.warn(`Compiler for ${language} is not installed locally. Initiating fallback execution.`);
-        
-        // For JavaScript/Python, we run them natively. For others, we can simulate:
-        // If they ask for simple sum of two numbers or standard input/output, we can check.
-        // We will return a simulated result that is based on standard test outputs if possible.
-        // Let's print out what they input or evaluate standard logic:
-        let simulatedOutput = "";
-        
-        // Check if there is basic logic in the code
-        if (code.includes("+") || code.includes("sum")) {
-          // parse input numbers
-          const nums = input.trim().split(/\s+/).map(Number).filter((n: number) => !isNaN(n));
-          if (nums.length >= 2) {
-            simulatedOutput = (nums[0] + nums[1]).toString() + "\n";
-          } else if (nums.length === 1) {
-            simulatedOutput = nums[0].toString() + "\n";
-          } else {
-            simulatedOutput = "0\n";
-          }
-        } else {
-          // general mock return matching basic inputs
-          simulatedOutput = input ? `Processed: ${input.trim()}\n` : "Execution Success\n";
-        }
-
         return NextResponse.json({
-          success: true,
-          output: simulatedOutput,
-          warnings: `Compiler for ${language} is not installed. Running in sandbox simulation mode.`,
+          success: false,
+          error: `Compiler for ${language} is not installed on the server.`,
+          details: `Please ensure the appropriate compiler/interpreter is available.`
         });
       }
 
