@@ -37,12 +37,13 @@ import {
   Lock,
   RotateCcw,
   Trophy,
-  Award
+  Award,
+  Pencil
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatTime } from "@/lib/utils";
+import { formatTime, isNameConfirmed } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 
 export default function AdminManagementPage() {
@@ -69,6 +70,11 @@ export default function AdminManagementPage() {
   const [overrideMarks, setOverrideMarks] = useState<number | "">("");
   const [overrideSearchQuery, setOverrideSearchQuery] = useState("");
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
+
+  // Edit Student States
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<any>(null);
+  const [editStudentName, setEditStudentName] = useState("");
 
 
   const availableDomains = [
@@ -163,6 +169,29 @@ export default function AdminManagementPage() {
     if (!confirm("Remove student?")) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
     if (!error) fetchAllData(adminSession, selectedBatch);
+  };
+
+  const handleEditStudent = (student: any) => {
+    setEditingStudent(student);
+    setEditStudentName(isNameConfirmed(student.name, student.roll_number) ? student.name : "");
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveStudentName = async () => {
+    if (!editingStudent) return;
+    const { error } = await supabase
+      .from('students')
+      .update({ name: editStudentName.trim() })
+      .eq('id', editingStudent.id);
+      
+    if (error) {
+      alert(error.message);
+    } else {
+      setIsEditModalOpen(false);
+      setEditingStudent(null);
+      fetchAllData(adminSession, selectedBatch);
+      alert("Student name modified successfully.");
+    }
   };
 
   const handleBulkImport = async () => {
@@ -374,17 +403,22 @@ export default function AdminManagementPage() {
     domains.forEach(domain => {
       const domainData = data.filter(r => (r.domain || 'general') === domain);
       
-      const sheetData = domainData.map(r => ({
-        "Roll Number": r.roll_number,
-        "Test Name": r.quizzes?.title || "System Test",
-        "Domain": domain.replace('-', ' ').toUpperCase(),
-        "Score %": `${r.score}%`,
-        "Correct": r.correct,
-        "Incorrect": r.incorrect,
-        "Total Questions": r.total,
-        "Time Taken": formatTime(r.time_taken),
-        "Date": new Date(r.timestamp).toLocaleDateString()
-      }));
+      const sheetData = domainData.map(r => {
+        const student = students.find(s => s.roll_number === r.roll_number);
+        const nameToUse = student && isNameConfirmed(student.name, student.roll_number) ? student.name : r.roll_number;
+        return {
+          "Roll Number": r.roll_number,
+          "Student Name": nameToUse,
+          "Test Name": r.quizzes?.title || "System Test",
+          "Domain": domain.replace('-', ' ').toUpperCase(),
+          "Score %": `${r.score}%`,
+          "Correct": r.correct,
+          "Incorrect": r.incorrect,
+          "Total Questions": r.total,
+          "Time Taken": formatTime(r.time_taken),
+          "Date": new Date(r.timestamp).toLocaleDateString()
+        };
+      });
 
       const worksheet = XLSX.utils.json_to_sheet(sheetData);
       
@@ -421,7 +455,7 @@ export default function AdminManagementPage() {
       const sheetData = domainStudents.map((s, idx) => ({
         "Rank": idx + 1,
         "Roll Number": s.roll_number,
-        "Name": s.name || `Student ${s.roll_number}`,
+        "Name": isNameConfirmed(s.name, s.roll_number) ? s.name : s.roll_number,
         "Domain": domain.replace('-', ' ').toUpperCase(),
         "Batch": s.batch || selectedBatch,
         "Total Credits (Correct Answers)": s.totalCredits,
@@ -447,7 +481,7 @@ export default function AdminManagementPage() {
     const consolidatedData = leaderboardData.map((s, idx) => ({
       "Rank": idx + 1,
       "Roll Number": s.roll_number,
-      "Name": s.name || `Student ${s.roll_number}`,
+      "Name": isNameConfirmed(s.name, s.roll_number) ? s.name : s.roll_number,
       "Domain": s.domain.replace('-', ' ').toUpperCase(),
       "Batch": s.batch || selectedBatch,
       "Total Credits (Correct Answers)": s.totalCredits,
@@ -763,40 +797,46 @@ export default function AdminManagementPage() {
                           const score = selectedQuizForGrades ? getStudentScoreForQuiz(student.roll_number, selectedQuizForGrades) : null;
                           return (
                             <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group relative overflow-hidden">
-                              <div className="flex items-center gap-4 relative z-10">
-                                <User className="w-5 h-5 text-muted-foreground" />
-                                <div>
-                                  <p className="font-bold">{student.roll_number}</p>
-                                  {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>}
-                                </div>
+                            <div className="flex items-center gap-4 relative z-10">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                              <div>
+                                <p className="font-bold">{student.roll_number}</p>
+                                {isNameConfirmed(student.name, student.roll_number) && (
+                                  <p className="text-xs text-muted-foreground">{student.name}</p>
+                                )}
+                                {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Not Attempted</p>}
                               </div>
+                            </div>
                               
-                                <div className="flex items-center gap-4 relative z-10">
-                                  {score !== null ? (
-                                    score === -1 ? (
-                                      <div className="text-right flex items-center gap-3">
-                                        <div className="text-right">
-                                          <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
-                                          <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="text-right">
-                                        <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                        <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                                      </div>
-                                    )
-                                  ) : (
-                                    selectedQuizForGrades && (
-                                      <div className="text-right">
-                                        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>
-                                      </div>
-                                    )
-                                  )}
-                                <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
+                            <div className="flex items-center gap-4 relative z-10">
+                              {score !== null ? (
+                                score === -1 ? (
+                                  <div className="text-right flex items-center gap-3">
+                                    <div className="text-right">
+                                      <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
+                                      <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-right">
+                                    <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                                    <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
+                                  </div>
+                                )
+                              ) : (
+                                selectedQuizForGrades && (
+                                  <div className="text-right">
+                                    <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>
+                                  </div>
+                                )
+                              )}
+                              <Button variant="ghost" onClick={() => handleEditStudent(student)} className="w-8 h-8 p-0 text-primary opacity-0 group-hover:opacity-100 transition-all mr-1" title="Edit Student Name">
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                               {score !== null && <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />}
                             </div>
                           );
@@ -815,6 +855,9 @@ export default function AdminManagementPage() {
                           <User className="w-5 h-5 text-muted-foreground" />
                           <div>
                             <p className="font-bold">{student.roll_number}</p>
+                            {isNameConfirmed(student.name, student.roll_number) && (
+                              <p className="text-xs text-muted-foreground">{student.name}</p>
+                            )}
                             <p className="text-[10px] uppercase font-black text-primary tracking-widest">{student.domain}</p>
                             {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Not Attempted</p>}
                           </div>
@@ -841,6 +884,9 @@ export default function AdminManagementPage() {
                               </div>
                             )
                           )}
+                          <Button variant="ghost" onClick={() => handleEditStudent(student)} className="w-8 h-8 p-0 text-primary opacity-0 group-hover:opacity-100 transition-all mr-1" title="Edit Student Name">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -892,94 +938,107 @@ export default function AdminManagementPage() {
 
           {activeTab === "results" && (
             <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-               {filteredResults.map((res) => (
-                 <div key={res.id} onClick={() => setSelectedResult(res)} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all cursor-pointer group">
-                    <div className="md:col-span-3 flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{res.roll_number.slice(-2)}</div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold">{res.roll_number}</p>
-                          {res.reattempt_count > 0 && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[8px] font-black text-amber-500 uppercase tracking-widest">
-                              {res.reattempt_count} Re-attempt(s)
-                            </span>
+               {filteredResults.map((res) => {
+                 const student = students.find(s => s.roll_number === res.roll_number);
+                 const hasConfirmedName = student && isNameConfirmed(student.name, student.roll_number);
+                 return (
+                   <div key={res.id} onClick={() => setSelectedResult(res)} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all cursor-pointer group">
+                      <div className="md:col-span-3 flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{res.roll_number.slice(-2)}</div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold">{res.roll_number}</p>
+                            {res.reattempt_count > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[8px] font-black text-amber-500 uppercase tracking-widest">
+                                {res.reattempt_count} Re-attempt(s)
+                              </span>
+                            )}
+                          </div>
+                          {hasConfirmedName && (
+                            <p className="text-xs text-primary font-bold">{student.name}</p>
                           )}
+                          <p className="text-[10px] uppercase font-black text-muted-foreground">{res.domain === 'all' ? 'All Domains' : res.domain.replace('-', ' ')}</p>
                         </div>
-                        <p className="text-[10px] uppercase font-black text-muted-foreground">{res.domain === 'all' ? 'All Domains' : res.domain.replace('-', ' ')}</p>
                       </div>
-
-                    </div>
-                    <div className="md:col-span-4 border-l border-white/5 pl-6">
-                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Test Name</p>
-                      <p className="font-bold truncate">{res.quizzes?.title || "System Quiz"}</p>
-                    </div>
-                    <div className="md:col-span-2 text-center">
-                      <p className="text-xs text-muted-foreground font-bold uppercase">Score</p>
-                      <p className={`text-xl font-black ${res.score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{res.score}%</p>
-                    </div>
-                    <div className="md:col-span-2 text-right opacity-60"><p className="text-xs font-bold">{new Date(res.timestamp).toLocaleDateString()}</p></div>
-                    <div className="md:col-span-1 flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); deleteResult(res.id); }}
-                        className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                        title="Allow Re-attempt (Delete Result)"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                      <ExternalLink className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                 </div>
-               ))}
+                      <div className="md:col-span-4 border-l border-white/5 pl-6">
+                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Test Name</p>
+                        <p className="font-bold truncate">{res.quizzes?.title || "System Quiz"}</p>
+                      </div>
+                      <div className="md:col-span-2 text-center">
+                        <p className="text-xs text-muted-foreground font-bold uppercase">Score</p>
+                        <p className={`text-xl font-black ${res.score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{res.score}%</p>
+                      </div>
+                      <div className="md:col-span-2 text-right opacity-60"><p className="text-xs font-bold">{new Date(res.timestamp).toLocaleDateString()}</p></div>
+                      <div className="md:col-span-1 flex justify-end gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); deleteResult(res.id); }}
+                          className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                          title="Allow Re-attempt (Delete Result)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <ExternalLink className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                   </div>
+                 );
+               })}
             </motion.div>
           )}
 
           {activeTab === "requests" && (
             <motion.div key="requests" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-               {filteredRequests.map((req) => (
-                 <div key={req.id} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all group">
-                    <div className="md:col-span-3 flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 font-bold"><Lock className="w-5 h-5" /></div>
-                      <div>
-                        <p className="font-bold">{req.roll_number}</p>
-                        <p className="text-[10px] uppercase font-black text-muted-foreground">{req.domain.replace('-', ' ')}</p>
+               {filteredRequests.map((req) => {
+                 const student = students.find(s => s.roll_number === req.roll_number);
+                 const hasConfirmedName = student && isNameConfirmed(student.name, student.roll_number);
+                 return (
+                   <div key={req.id} className="glass p-6 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-12 items-center hover:border-primary/30 transition-all group">
+                      <div className="md:col-span-3 flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 font-bold"><Lock className="w-5 h-5" /></div>
+                        <div>
+                          <p className="font-bold">{req.roll_number}</p>
+                          {hasConfirmedName && (
+                            <p className="text-xs text-orange-400 font-bold">{student.name}</p>
+                          )}
+                          <p className="text-[10px] uppercase font-black text-muted-foreground">{req.domain.replace('-', ' ')}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="md:col-span-4 border-l border-white/5 pl-6">
-                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">New Password</p>
-                      <p className="font-mono text-primary font-bold">{req.requested_password}</p>
-                    </div>
-                    <div className="md:col-span-2 text-center">
-                      <p className="text-xs text-muted-foreground font-bold uppercase mb-1">Status</p>
-                      <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                        req.password_request_status === 'ACCEPTED' ? 'bg-emerald-500/20 text-emerald-400' : 
-                        req.password_request_status === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 
-                        'bg-orange-500/20 text-orange-400'
-                      }`}>
-                        {req.password_request_status}
-                      </span>
-                    </div>
-                    <div className="md:col-span-3 flex justify-end gap-2">
-                      {req.password_request_status === 'PENDING' && (
-                        <>
-                          <Button 
-                            onClick={() => handleRejectPasswordRequest(req)}
-                            className="h-10 rounded-xl px-4 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all font-bold text-xs"
-                          >
-                            Reject
-                          </Button>
-                          <Button 
-                            onClick={() => handleAcceptPasswordRequest(req)}
-                            className="h-10 rounded-xl px-4 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all font-bold text-xs"
-                          >
-                            Accept
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                 </div>
-               ))}
+                      <div className="md:col-span-4 border-l border-white/5 pl-6">
+                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">New Password</p>
+                        <p className="font-mono text-primary font-bold">{req.requested_password}</p>
+                      </div>
+                      <div className="md:col-span-2 text-center">
+                        <p className="text-xs text-muted-foreground font-bold uppercase mb-1">Status</p>
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
+                          req.password_request_status === 'ACCEPTED' ? 'bg-emerald-500/20 text-emerald-400' : 
+                          req.password_request_status === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 
+                          'bg-orange-500/20 text-orange-400'
+                        }`}>
+                          {req.password_request_status}
+                        </span>
+                      </div>
+                      <div className="md:col-span-3 flex justify-end gap-2">
+                        {req.password_request_status === 'PENDING' && (
+                          <>
+                            <Button 
+                              onClick={() => handleRejectPasswordRequest(req)}
+                              className="h-10 rounded-xl px-4 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all font-bold text-xs"
+                            >
+                              Reject
+                            </Button>
+                            <Button 
+                              onClick={() => handleAcceptPasswordRequest(req)}
+                              className="h-10 rounded-xl px-4 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all font-bold text-xs"
+                            >
+                              Accept
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                   </div>
+                 );
+               })}
                {filteredRequests.length === 0 && (
                  <div className="glass p-12 rounded-[3rem] border border-white/5 text-center">
                     <p className="text-muted-foreground font-bold italic">No password change requests found.</p>
@@ -1041,6 +1100,9 @@ export default function AdminManagementPage() {
                       {/* Student Info */}
                       <div className="md:col-span-3">
                         <p className="font-black text-lg text-white">{student.roll_number}</p>
+                        {isNameConfirmed(student.name, student.roll_number) && (
+                          <p className="text-xs text-muted-foreground font-bold">{student.name}</p>
+                        )}
                         <p className="text-xs text-muted-foreground capitalize mt-0.5">{student.domain.replace('-', ' ')}</p>
                       </div>
 
@@ -1090,7 +1152,16 @@ export default function AdminManagementPage() {
                 <div className="flex justify-between items-start mb-10">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary"><User className="w-6 h-6" /></div>
-                    <div><h2 className="text-3xl font-black">{selectedResult.roll_number}</h2><p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">{selectedResult.domain}</p></div>
+                    <div>
+                      <h2 className="text-3xl font-black">{selectedResult.roll_number}</h2>
+                      {(() => {
+                        const student = students.find(s => s.roll_number === selectedResult.roll_number);
+                        return student && isNameConfirmed(student.name, student.roll_number) ? (
+                          <p className="text-sm text-primary font-bold">{student.name}</p>
+                        ) : null;
+                      })()}
+                      <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">{selectedResult.domain}</p>
+                    </div>
                   </div>
                   <Button variant="ghost" onClick={() => setSelectedResult(null)}>✕</Button>
                 </div>
@@ -1246,91 +1317,56 @@ export default function AdminManagementPage() {
         {/* Manual Marks Override Modal */}
         <AnimatePresence>
           {isManualMarksModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-              <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                exit={{ opacity: 0 }} 
-                onClick={() => setIsManualMarksModalOpen(false)} 
-                className="absolute inset-0 bg-black/90 backdrop-blur-md" 
-              />
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }} 
-                animate={{ opacity: 1, scale: 1 }} 
-                className="relative w-full max-w-md glass p-10 rounded-[2.5rem] border border-white/10 shadow-2xl space-y-6"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500">
-                    <ShieldAlert className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-black text-white">Override Student Marks</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Super Admin manual entry override</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Select Roll Number Search */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Select Student</Label>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-md glass rounded-[2.5rem] border border-white/10 shadow-2xl p-10">
+                <h2 className="text-xl font-black text-white">Override Student Marks</h2>
+                <div className="space-y-4 mt-6">
+                  {/* Select Student */}
+                  <div className="space-y-2 relative">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Search Student (Roll Number)</Label>
                     {overrideRollNumber ? (
-                      <div className="flex items-center justify-between p-3.5 bg-primary/10 border border-primary/20 rounded-xl">
-                        <div>
-                          <p className="text-sm font-black text-white">{overrideRollNumber}</p>
-                          <p className="text-[10px] text-muted-foreground font-medium">
-                            {students.find(s => s.roll_number === overrideRollNumber)?.name || "Selected Student"}
-                          </p>
-                        </div>
-                        <Button 
+                      <div className="h-12 bg-white/5 border border-white/10 rounded-xl px-4 flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{overrideRollNumber}</span>
+                        <button 
                           type="button" 
-                          variant="ghost" 
                           onClick={() => {
                             setOverrideRollNumber("");
                             setOverrideSearchQuery("");
                           }}
-                          className="h-8 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg px-3"
+                          className="text-xs text-red-400 hover:text-red-300 font-bold"
                         >
                           Change
-                        </Button>
+                        </button>
                       </div>
                     ) : (
-                      <div className="space-y-2 relative">
+                      <div className="relative">
                         <Input 
-                          placeholder="Search by Roll Number..." 
+                          placeholder="e.g. 21471A0501" 
                           value={overrideSearchQuery}
                           onChange={(e) => setOverrideSearchQuery(e.target.value.toUpperCase())}
                           className="h-12 bg-white/5 border-white/10 rounded-xl text-white font-bold"
                         />
                         {overrideSearchQuery && (
                           <div className="absolute left-0 right-0 mt-1 bg-[#0f0f0f] border border-white/10 rounded-xl p-2 z-50 max-h-48 overflow-y-auto shadow-2xl space-y-1">
-                            {students.filter(s => s.roll_number.toLowerCase().includes(overrideSearchQuery.toLowerCase())).length > 0 ? (
-                              students.filter(s => s.roll_number.toLowerCase().includes(overrideSearchQuery.toLowerCase())).slice(0, 5).map(s => (
-                                <button
-                                  type="button"
-                                  key={s.id}
-                                  onClick={() => {
-                                    setOverrideRollNumber(s.roll_number);
-                                    setOverrideSearchQuery(s.roll_number);
-                                  }}
-                                  className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-primary/20 hover:text-white transition-all text-xs font-bold flex items-center justify-between group"
-                                >
-                                  <div>
-                                    <span className="text-white">{s.roll_number}</span>
-                                    <span className="text-muted-foreground ml-2">({s.name})</span>
-                                  </div>
-                                  <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Click to select</span>
-                                </button>
-                              ))
-                            ) : (
-                              <p className="text-xs text-red-400 font-bold p-2 text-center">No student exists</p>
-                            )}
+                            {students.filter(s => s.roll_number.toLowerCase().includes(overrideSearchQuery.toLowerCase())).slice(0, 5).map(s => (
+                              <button
+                                type="button"
+                                key={s.id}
+                                onClick={() => {
+                                  setOverrideRollNumber(s.roll_number);
+                                  setOverrideSearchQuery(s.roll_number);
+                                }}
+                                className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-primary/20 hover:text-white transition-all text-xs font-bold"
+                              >
+                                {s.roll_number} {isNameConfirmed(s.name, s.roll_number) && <span className="text-muted-foreground ml-2">({s.name})</span>}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
                     )}
                   </div>
 
-                  {/* Select Quiz */}
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Select Assessment</Label>
                     <select 
@@ -1339,47 +1375,72 @@ export default function AdminManagementPage() {
                       className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm font-bold outline-none cursor-pointer text-white"
                     >
                       <option value="" className="bg-[#050505] text-muted-foreground">-- Choose Quiz --</option>
-                      {quizzes.map(q => (
-                        <option key={q.id} value={q.id} className="bg-[#050505] text-white">
-                          {q.title} ({q.batch})
-                        </option>
-                      ))}
+                      {quizzes.map(q => <option key={q.id} value={q.id} className="bg-[#050505] text-white">{q.title}</option>)}
                     </select>
                   </div>
 
-                  {/* Enter Marks */}
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Enter Marks (%)</Label>
                     <Input 
                       type="number" 
-                      placeholder="e.g. 85" 
                       value={overrideMarks} 
-                      onChange={(e) => setOverrideMarks(e.target.value === "" ? "" : Number(e.target.value))} 
+                      onChange={(e) => setOverrideMarks(Number(e.target.value))} 
                       className="h-12 bg-white/5 border-white/10 rounded-xl text-white font-bold" 
-                      min={0}
-                      max={100}
                     />
                   </div>
 
-                  {/* Submit buttons */}
+                  <div className="pt-4 flex gap-4">
+                    <Button variant="ghost" onClick={() => setIsManualMarksModalOpen(false)} className="flex-1 h-12 rounded-xl font-bold text-white">Cancel</Button>
+                    <Button onClick={handleSaveManualMarks} disabled={isSubmittingOverride} className="flex-1 h-12 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg">Save Override</Button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Edit Student Name Modal */}
+        <AnimatePresence>
+          {isEditModalOpen && editingStudent && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-md glass rounded-[2.5rem] border border-white/10 shadow-2xl p-10">
+                <h2 className="text-xl font-black text-white">Modify Student Name</h2>
+                <div className="space-y-4 mt-6">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Roll Number</Label>
+                    <Input 
+                      value={editingStudent.roll_number}
+                      disabled
+                      className="h-12 bg-white/5 border-white/10 rounded-xl text-white/50 font-bold select-none"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Student Name</Label>
+                    <Input 
+                      value={editStudentName}
+                      onChange={(e) => setEditStudentName(e.target.value)}
+                      placeholder="Enter corrected student name"
+                      className="h-12 bg-white/5 border-white/10 rounded-xl text-white font-bold"
+                    />
+                  </div>
+
                   <div className="pt-4 flex gap-4">
                     <Button 
                       variant="ghost" 
-                      onClick={() => setIsManualMarksModalOpen(false)} 
+                      onClick={() => {
+                        setIsEditModalOpen(false);
+                        setEditingStudent(null);
+                      }} 
                       className="flex-1 h-12 rounded-xl font-bold text-white hover:bg-white/10"
                     >
                       Cancel
                     </Button>
                     <Button 
-                      onClick={handleSaveManualMarks} 
-                      disabled={isSubmittingOverride}
-                      className="flex-1 h-12 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/20"
+                      onClick={handleSaveStudentName} 
+                      className="flex-1 h-12 rounded-xl font-bold bg-primary hover:bg-primary/95 text-white shadow-lg shadow-primary/20"
                     >
-                      {isSubmittingOverride ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        "Save Override"
-                      )}
+                      Save Changes
                     </Button>
                   </div>
                 </div>

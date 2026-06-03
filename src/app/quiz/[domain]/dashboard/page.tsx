@@ -28,6 +28,9 @@ import {
   CheckCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { isNameConfirmed } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { 
   downloadSingleReportCard, 
@@ -48,6 +51,12 @@ export default function StudentDashboard() {
   const [allQuizzes, setAllQuizzes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Name Confirmation Modal States
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [nameModalStep, setNameModalStep] = useState(1);
+  const [enteredName, setEnteredName] = useState("");
+  const [isSubmittingName, setIsSubmittingName] = useState(false);
 
   // Re-attempt feature states
   const [isReattemptModalOpen, setIsReattemptModalOpen] = useState(false);
@@ -123,6 +132,24 @@ export default function StudentDashboard() {
   const fetchData = async (studentData: any) => {
     setIsLoading(true);
     try {
+      // 0. Fetch latest student details to verify name confirmation
+      const { data: dbStudent, error: dbStudentError } = await supabase
+        .from('students')
+        .select('*')
+        .eq('roll_number', studentData.rollNumber)
+        .single();
+
+      if (dbStudent && !dbStudentError) {
+        if (dbStudent.name !== studentData.name) {
+          const updatedSession = { ...studentData, name: dbStudent.name };
+          localStorage.setItem("student_session", JSON.stringify(updatedSession));
+          setStudent(updatedSession);
+        }
+        if (!isNameConfirmed(dbStudent.name, dbStudent.roll_number)) {
+          setShowNameModal(true);
+        }
+      }
+
       const { data: quizzes, error: qError } = await supabase
         .from('quizzes')
         .select('*')
@@ -1153,6 +1180,138 @@ export default function StudentDashboard() {
               <p className="text-xs font-medium text-white/90 mt-0.5 leading-relaxed">{notificationText}</p>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Name Setup / Confirmation Modal */}
+      <AnimatePresence>
+        {showNameModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md glass rounded-[2.5rem] border border-white/10 shadow-2xl p-10 space-y-6 bg-slate-950/80 text-left"
+            >
+              {nameModalStep === 1 ? (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-primary">
+                      <User className="w-6 h-6" />
+                    </div>
+                    <h2 className="text-2xl font-black text-white">Setup Your Profile</h2>
+                    <p className="text-sm text-muted-foreground mt-2">Please enter your official permanent name.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Your Full Name</Label>
+                    <Input
+                      value={enteredName}
+                      onChange={(e) => setEnteredName(e.target.value)}
+                      placeholder="Enter your name"
+                      className="h-12 bg-white/5 border-white/10 rounded-xl text-white font-bold"
+                      required
+                    />
+                    <p className="text-[11px] text-amber-400 font-bold mt-1.5 flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                      Hint: Only one time enters fixed, not able to change.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => {
+                      if (!enteredName.trim()) {
+                        alert("Please enter a valid name.");
+                        return;
+                      }
+                      setNameModalStep(2);
+                    }}
+                    className="w-full h-12 rounded-xl text-sm font-bold bg-primary text-white"
+                  >
+                    Next Step
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-400">
+                      <CheckCircle className="w-6 h-6" />
+                    </div>
+                    <h2 className="text-2xl font-black text-white">Confirm Details</h2>
+                    <p className="text-sm text-muted-foreground mt-2">Please verify that your name and roll number are correct.</p>
+                  </div>
+
+                  <div className="space-y-4 bg-white/5 p-5 rounded-2xl border border-white/5">
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Roll Number</span>
+                      <p className="text-sm font-bold text-white/60 bg-white/5 px-3 py-2 rounded-lg border border-white/5 select-none">{student.rollNumber}</p>
+                      <p className="text-[9px] text-muted-foreground font-medium italic mt-0.5">Note: Roll number cannot be modified.</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Confirm Name</span>
+                      <Input
+                        value={enteredName}
+                        onChange={(e) => setEnteredName(e.target.value)}
+                        placeholder="Your Name"
+                        className="h-10 bg-white/10 border-white/10 rounded-lg text-white font-bold"
+                        required
+                      />
+                      <p className="text-[9px] text-muted-foreground font-medium italic mt-0.5">If changes want, you can modify your name here.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <Button
+                      onClick={() => setNameModalStep(1)}
+                      variant="glass"
+                      className="flex-1 h-12 rounded-xl border-white/10"
+                      disabled={isSubmittingName}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        if (!enteredName.trim()) {
+                          alert("Please enter a valid name.");
+                          return;
+                        }
+                        setIsSubmittingName(true);
+                        try {
+                          const { error } = await supabase
+                            .from('students')
+                            .update({ name: enteredName.trim() })
+                            .eq('roll_number', student.rollNumber);
+
+                          if (error) throw error;
+
+                          // Update localStorage
+                          const updatedSession = { ...student, name: enteredName.trim() };
+                          localStorage.setItem("student_session", JSON.stringify(updatedSession));
+                          setStudent(updatedSession);
+                          
+                          setShowNameModal(false);
+                          alert("Profile details confirmed successfully.");
+                        } catch (err: any) {
+                          alert(`Failed to save details: ${err.message}`);
+                        } finally {
+                          setIsSubmittingName(false);
+                        }
+                      }}
+                      disabled={isSubmittingName}
+                      className="flex-grow h-12 rounded-xl bg-primary text-white flex items-center justify-center gap-2"
+                    >
+                      {isSubmittingName ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        "Confirm & Save"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
