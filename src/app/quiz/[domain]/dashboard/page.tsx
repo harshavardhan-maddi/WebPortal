@@ -602,6 +602,64 @@ export default function StudentDashboard() {
               transition={{ duration: 0.25 }}
               className="space-y-10"
             >
+              {/* Consolidated Report Banner */}
+              <div className="glass p-8 rounded-[2rem] border border-white/10 shadow-2xl relative overflow-hidden bg-gradient-to-r from-primary/10 via-purple-500/5 to-transparent">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                  <div className="space-y-2">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/20 text-[10px] font-black uppercase tracking-widest text-primary">
+                      <Award className="w-3.5 h-3.5" /> Consolidated Analytics
+                    </div>
+                    <h3 className="text-2xl font-black text-white">Consolidated Performance Report</h3>
+                    <p className="text-sm text-muted-foreground max-w-xl">
+                      Download a comprehensive PDF summarizing all your test scores, batch rank progression, subject accuracy metrics, and personalized learning recommendations.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      if (isGeneratingPdf) return;
+                      setIsGeneratingPdf(true);
+                      try {
+                        const formattedStudent = {
+                          ...student,
+                          id: student.id || student.rollNumber,
+                          name: student.name,
+                          rollNumber: student.rollNumber,
+                          batch: student.batch || '3rd Year Super 50',
+                          domain: domain || student.domain || 'all'
+                        };
+                        
+                        downloadConsolidatedReport(
+                          formattedStudent,
+                          allResults,
+                          allQuizzes,
+                          batchStudents,
+                          batchResults
+                        );
+                      } catch (err) {
+                        console.error("Failed to generate consolidated report:", err);
+                        alert("Error generating PDF report. Please try again.");
+                      } finally {
+                        setIsGeneratingPdf(false);
+                      }
+                    }}
+                    disabled={isGeneratingPdf || allResults.filter(r => r.score !== -1 && r.score !== -2).length === 0}
+                    className="h-14 px-8 rounded-2xl font-black text-xs uppercase tracking-widest bg-primary hover:bg-primary/95 text-white flex items-center justify-center gap-2 shadow-lg shadow-primary/20 shrink-0 disabled:opacity-50"
+                  >
+                    {isGeneratingPdf ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" /> Download Consolidated PDF
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
               {/* Reports Dashboard Top Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
                 {/* Left Card: Streak & Assessments Attempted */}
@@ -929,6 +987,83 @@ export default function StudentDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Individual Test Reports Section */}
+              <section className="space-y-6 text-left">
+                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                  <h2 className="text-xl font-black flex items-center gap-3 text-white">
+                    <FileText className="w-5 h-5 text-primary" /> Individual Assessment Report Cards
+                  </h2>
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    {allResults.filter(r => r.score !== -1 && r.score !== -2).length} Available
+                  </span>
+                </div>
+                
+                <div className="grid gap-4">
+                  {allQuizzes
+                    .filter((q: any) => q.result && q.result.score !== -1 && q.result.score !== -2)
+                    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .map((quiz: any) => {
+                      const result = quiz.result;
+                      return (
+                        <div 
+                          key={quiz.id}
+                          className="glass p-6 rounded-[2rem] border border-white/5 hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                              <CheckCircle className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h4 className="text-base font-black text-white">{quiz.title}</h4>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1 font-bold">
+                                Completed on {quiz.date} • {quiz.questions?.length || 0} Qs • Score: {result.score}% ({result.correct}/{result.total})
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={async () => {
+                              try {
+                                const rankImpactMap = calculateRankProgression(batchStudents, batchResults, allQuizzes);
+                                const studentRankImpact = rankImpactMap[student.rollNumber] || {};
+                                const quizRankImpact = studentRankImpact[quiz.id] || null;
+                                
+                                const formattedStudent = {
+                                  ...student,
+                                  id: student.id || student.rollNumber,
+                                  name: student.name,
+                                  rollNumber: student.rollNumber,
+                                  batch: student.batch || '3rd Year Super 50',
+                                  domain: domain || student.domain || 'all'
+                                };
+                                
+                                downloadSingleReportCard(
+                                  formattedStudent,
+                                  result,
+                                  quiz,
+                                  quizRankImpact
+                                );
+                              } catch (err) {
+                                console.error("Failed to generate individual report:", err);
+                                alert("Failed to download PDF report. Please try again.");
+                              }
+                            }}
+                            variant="outline"
+                            className="h-11 px-6 rounded-xl text-xs font-black uppercase tracking-wider border-white/10 hover:bg-white/5 text-white flex items-center gap-2 shrink-0"
+                          >
+                            <Download className="w-4 h-4 text-primary" /> Report PDF
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  
+                  {allQuizzes.filter((q: any) => q.result && q.result.score !== -1 && q.result.score !== -2).length === 0 && (
+                    <div className="glass p-10 rounded-[2.5rem] border border-white/5 text-center text-muted-foreground font-medium italic">
+                      No assessment reports are available yet. Complete assessments to unlock detailed performance reports.
+                    </div>
+                  )}
+                </div>
+              </section>
             </motion.div>
           )}
         </AnimatePresence>
