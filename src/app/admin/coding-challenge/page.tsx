@@ -26,7 +26,68 @@ export default function CodingChallengePage() {
   const [filtered, setFiltered] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pdfData, setPdfData] = useState<any>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDomain, setNewDomain] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+// Handle PDF upload and extract properties
+const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  setPdfLoading(true);
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch('/api/pdf-extract', {
+      method: 'POST',
+      body: form,
+    });
+    const result = await response.json();
+    if (result.success) {
+      setPdfData(result.data);
+      // Optionally prefill new challenge fields from PDF
+      if (result.data.problemStatement) setNewDescription(result.data.problemStatement);
+      if (result.data.title) setNewTitle(result.data.title || "");
+      if (result.data.domain) setNewDomain(result.data.domain || "");
+    } else {
+      console.error('PDF extraction error:', result.error);
+    }
+  } catch (err) {
+    console.error('PDF upload failed:', err);
+  } finally {
+    setPdfLoading(false);
+  }
+};
 
+// Handle creating a new coding challenge
+const handleAddChallenge = async () => {
+  try {
+    const { error } = await supabase.from('quizzes').insert([
+      {
+        title: newTitle,
+        domain: newDomain,
+        description: newDescription,
+      },
+    ]);
+    if (error) {
+      console.error('Failed to create challenge:', error);
+      return;
+    }
+    // Reset form and close modal
+    setNewTitle('');
+    setNewDomain('');
+    setNewDescription('');
+    setShowAddModal(false);
+    // Refresh results – re-fetch
+    // Simple re-fetch by calling fetchResults (need to expose it)
+    // For now, reload page
+    window.location.reload();
+  } catch (err) {
+    console.error('Add challenge error:', err);
+  }
+};
   // Fetch coding challenge results from Supabase
   useEffect(() => {
     const fetchResults = async () => {
@@ -119,6 +180,13 @@ export default function CodingChallengePage() {
         <Button onClick={exportToExcel} variant="outline" className="flex items-center gap-2">
           <Download className="w-4 h-4" /> Export to Excel
         </Button>
+        <Button onClick={() => setShowAddModal(true)} variant="default" className="flex items-center gap-2">
+          Add Challenge
+        </Button>
+        <label className="flex items-center gap-2 cursor-pointer bg-white/5 px-3 py-1.5 rounded-full">
+          <input type="file" accept="application/pdf" hidden onChange={handlePdfUpload} />
+          <span className="text-sm">Upload PDF</span>
+        </label>
       </div>
 
       {loading ? (
@@ -153,6 +221,29 @@ export default function CodingChallengePage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showAddModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur">
+          <div className="bg-[#02030a] p-6 rounded-lg w-full max-w-md shadow-lg">
+            <h2 className="text-xl font-bold mb-4 text-purple-400">Add New Coding Challenge</h2>
+            <div className="space-y-3">
+              <Input placeholder="Title" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+              <Input placeholder="Domain (e.g., frontend)" value={newDomain} onChange={e => setNewDomain(e.target.value)} />
+              <textarea
+                placeholder="Description"
+                value={newDescription}
+                onChange={e => setNewDescription(e.target.value)}
+                className="w-full p-2 bg-white/5 rounded"
+                rows={4}
+              />
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
+                <Button onClick={handleAddChallenge}>Create</Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

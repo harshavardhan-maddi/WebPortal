@@ -20,10 +20,24 @@ import {
   Trophy,
   ShieldAlert,
   Flame,
-  Zap
+  Zap,
+  Download,
+  Award,
+  FileText,
+  TrendingDown,
+  CheckCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
+import { 
+  downloadSingleReportCard, 
+  downloadConsolidatedReport 
+} from "@/lib/pdfGenerator";
+import { 
+  getQuestionTopic, 
+  generateDeterministicStudentAnswers,
+  calculateRankProgression
+} from "@/lib/reportUtils";
 
 export default function StudentDashboard() {
   const { domain } = useParams();
@@ -48,6 +62,10 @@ export default function StudentDashboard() {
   const [myRank, setMyRank] = useState<number | null>(null);
   const [myCredits, setMyCredits] = useState<number>(0);
   const [hoveredPoint, setHoveredPoint] = useState<any>(null);
+  const [batchStudents, setBatchStudents] = useState<any[]>([]);
+  const [batchResults, setBatchResults] = useState<any[]>([]);
+  const [selectedResultDetail, setSelectedResultDetail] = useState<any>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -151,23 +169,25 @@ export default function StudentDashboard() {
       localStorage.setItem("global_quizzes", JSON.stringify(processedQuizzes));
 
       // Fetch leaderboard data for Top 3 Podium
-      const { data: batchStudents } = await supabase
+      const { data: batchStudentsData } = await supabase
         .from('students')
         .select('roll_number, name, domain')
         .eq('batch', studentData.batch || '3rd Year Super 50');
 
-      if (batchStudents && batchStudents.length > 0) {
-        const studentRolls = batchStudents.map(s => s.roll_number);
-        const { data: batchResults } = await supabase
+      if (batchStudentsData && batchStudentsData.length > 0) {
+        setBatchStudents(batchStudentsData);
+        const studentRolls = batchStudentsData.map(s => s.roll_number);
+        const { data: batchResultsData } = await supabase
           .from('results')
           .select('*')
           .in('roll_number', studentRolls)
           .neq('score', -1)
           .neq('score', -2);
 
-         if (batchResults) {
-          const studentCredits = batchStudents.map(s => {
-            const sResults = batchResults.filter(r => r.roll_number === s.roll_number);
+         if (batchResultsData) {
+          setBatchResults(batchResultsData);
+          const studentCredits = batchStudentsData.map(s => {
+            const sResults = batchResultsData.filter(r => r.roll_number === s.roll_number);
             const totalCredits = sResults.reduce((sum, r) => sum + (r.correct || 0), 0);
             return {
               roll_number: s.roll_number,

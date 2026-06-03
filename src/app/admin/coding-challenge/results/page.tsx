@@ -1,4 +1,4 @@
-// src/app/admin/coding-challenge/results/page.tsx
+"use client";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";

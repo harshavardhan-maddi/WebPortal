@@ -131,7 +131,7 @@ export default function ActiveQuizPage() {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   
   // Coding Challenge States
-  const [codeAnswers, setCodeAnswers] = useState<Record<number, { code: string; language: string }>>({});
+  const [codeAnswers, setCodeAnswers] = useState<Record<number, { code: string; language: string; codeByLang?: Record<string, string> }>>({});
   const [codeSubmissions, setCodeSubmissions] = useState<Record<number, number>>({});
   const [compileOutputs, setCompileOutputs] = useState<Record<number, { success: boolean; output: string; details?: string; warnings?: string }>>({});
   const [testResults, setTestResults] = useState<Record<number, { passed: number; total: number; details: any[] }>>({});
@@ -329,7 +329,7 @@ export default function ActiveQuizPage() {
       setQuestions(quizData.questions);
       
       // Initialize code boilerplates
-      const initialCodeAnswers: Record<number, { code: string; language: string }> = {};
+      const initialCodeAnswers: Record<number, { code: string; language: string; codeByLang?: Record<string, string> }> = {};
       quizData.questions.forEach((q: any, idx: number) => {
         if (q.type === "CODING") {
           const defaultLang = q.languages?.[0] || "javascript";
@@ -681,8 +681,7 @@ export default function ActiveQuizPage() {
   // Current compiler status text
   const currentSubmissionCount = codeSubmissions[currentQuestionIndex] || 0;
 
-  return (
-    <div className="min-h-screen bg-[#02030a] text-white overflow-hidden flex flex-col select-none">
+  return (<div className="min-h-screen bg-[#02030a] text-white overflow-hidden flex flex-col select-none">
       {/* Header */}
       <header className="h-20 glass border-b border-white/5 px-6 flex items-center justify-between z-20">
         <div className="flex items-center gap-4">
@@ -799,15 +798,11 @@ export default function ActiveQuizPage() {
                     {/* Toolbar / Selector */}
                     <div className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#05060f]/60">
                       <div className="flex items-center gap-3">
-                        <Code className="w-4 h-4 text-cyan-400" />
-                    <div className=\"h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#05060f]/60\">
-                      <div className=\"flex items-center gap-3\">
-                        <Code className=\"w-4 h-4 text-cyan-400\" />
-                        <span className=\"text-xs font-bold uppercase tracking-wider text-cyan-400\">Editor</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Editor</span>
                       </div>
                       
                       {/* Language Selection */}
-                      <div className=\"flex gap-2\">
+                      <div className="flex gap-2">
                         {currentQuestion.languages?.map((lang: string) => {
                           const isSelected = codeAnswers[currentQuestionIndex]?.language === lang;
                           // Retrieve stored code for this language or use template if none
@@ -817,7 +812,10 @@ export default function ActiveQuizPage() {
                               key={lang}
                               onClick={() => {
                                 setCodeAnswers(prev => {
-                                  const current = prev[currentQuestionIndex] || {};
+                                  const current = prev[currentQuestionIndex] || {
+                                    code: CODE_TEMPLATES[lang] || "",
+                                    language: lang
+                                  };
                                   const existingCodeByLang = current.codeByLang || {};
                                   // Preserve current code under its language before switching
                                   const updatedCodeByLang = {
@@ -842,7 +840,7 @@ export default function ActiveQuizPage() {
                                   : 'bg-white/5 border-white/5 text-muted-foreground hover:text-white'
                               }`}
                             >
-                              {lang === \"cpp\" ? \"C++\" : lang}
+                              {lang === "cpp" ? "C++" : lang}
                             </button>
                           );
                         })}

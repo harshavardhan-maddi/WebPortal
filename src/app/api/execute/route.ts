@@ -19,6 +19,12 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { code, language, input = "" } = body;
 
+    // Validate language selection
+    const supportedLanguages = ["javascript", "python", "c", "cpp", "java"]; 
+    if (!language || !supportedLanguages.includes(language.toLowerCase())) {
+      return NextResponse.json({ error: "Unsupported or missing language" }, { status: 400 });
+    }
+
     if (!code) {
       return NextResponse.json({ error: "Code is required" }, { status: 400 });
     }
