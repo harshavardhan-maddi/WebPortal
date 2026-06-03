@@ -811,7 +811,9 @@ export default function StudentDashboard() {
                               {index + 1}
                             </span>
                             <span className="text-xs font-black text-white">{item.roll_number}</span>
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">({item.name})</span>
+                            {isNameConfirmed(item.name, item.roll_number) && (
+                              <span className="text-[10px] text-muted-foreground truncate max-w-[100px] ml-1">({item.name})</span>
+                            )}
                           </div>
                           <span className="text-xs font-black text-muted-foreground">{item.totalCredits} Cr</span>
                         </div>
@@ -857,7 +859,9 @@ export default function StudentDashboard() {
                                 {idx + 1}
                               </span>
                               <span className={`text-xs font-black ${isMe ? 'text-white' : 'text-white/80'}`}>{item.roll_number}</span>
-                              <span className="text-[9px] text-muted-foreground truncate max-w-[80px]">({item.name})</span>
+                              {isNameConfirmed(item.name, item.roll_number) && (
+                                <span className="text-[9px] text-muted-foreground truncate max-w-[80px] ml-1">({item.name})</span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-black text-white/90">{item.totalCredits} Cr</span>
