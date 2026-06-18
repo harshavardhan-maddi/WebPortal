@@ -51,12 +51,7 @@ export default function StudentLoginPage() {
 
   const selectBatch = (batchId: string) => {
     setFormData({ ...formData, batch: batchId });
-    if (batchId === "4th Year Super 50") {
-      setFormData(prev => ({ ...prev, domain: "general", batch: batchId }));
-      setStep(2); // Skip domain selection for 4th years
-    } else {
-      setStep(1); // Proceed to domain selection for 3rd years
-    }
+    setStep(2); // Skip domain selection entirely and go to credentials step
     setError("");
   };
 
@@ -103,14 +98,6 @@ export default function StudentLoginPage() {
           return;
         }
 
-        // Enforce domain-locking
-        if (student.domain !== formData.domain) {
-          setError("You are not in this domain. Select your domain and attempt your test.");
-          setIsLoading(false);
-          return;
-        }
-
-
         localStorage.setItem("student_session", JSON.stringify({
           id: student.id,
           email: `${student.roll_number}@nrtec.in`,
@@ -120,7 +107,7 @@ export default function StudentLoginPage() {
           name: student.name,
           token: Math.random().toString(36).substring(7),
         }));
-        router.push(`/quiz/${formData.domain}/dashboard`);
+        router.push(`/quiz/${student.domain}/dashboard`);
 
       } else {
         // No student found in the database
@@ -219,7 +206,7 @@ export default function StudentLoginPage() {
                 exit={{ opacity: 0, x: -20 }}
               >
                 <button 
-                  onClick={() => formData.batch === "4th Year Super 50" ? setStep(0) : setStep(1)}
+                  onClick={() => setStep(0)}
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white mb-10 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" /> Go Back
@@ -232,12 +219,6 @@ export default function StudentLoginPage() {
                       <span className="w-2 h-2 rounded-full bg-primary" />
                       Batch: {formData.batch}
                     </p>
-                    {formData.batch !== "4th Year Super 50" && (
-                      <p className="text-muted-foreground flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-primary" />
-                        Domain: {domains.find(d => d.id === formData.domain)?.title}
-                      </p>
-                    )}
                   </div>
                 </div>
 
