@@ -154,7 +154,7 @@ export default function AdminManagementPage() {
 
   const handleAddStudent = async () => {
     if (!newRollNumber) return;
-    const domainToAssign = selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain);
+    const domainToAssign = selectedBatch === "3rd Year Super 50" ? "3rd-year-super-50" : (selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : "general"));
     const { error } = await supabase.from('students').insert([{ 
       roll_number: newRollNumber, 
       domain: domainToAssign, 
@@ -230,7 +230,7 @@ export default function AdminManagementPage() {
       return;
     }
 
-    const domainToAssign = selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : newStudentDomain);
+    const domainToAssign = selectedBatch === "3rd Year Super 50" ? "3rd-year-super-50" : (selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : "general"));
     
     const studentsToInsert = newRolls.map(roll => ({
       roll_number: roll,
@@ -706,19 +706,7 @@ export default function AdminManagementPage() {
           </div>
         </div>
 
-        {/* Super Admin Domain Tabs - Only for Super Admin in 3rd Year */}
-        {adminSession?.role === "super-admin" && selectedBatch === "3rd Year Super 50" && (
-          <div className="flex flex-wrap gap-3 pb-2 overflow-x-auto no-scrollbar">
-            <Button variant={selectedDomain === null ? "default" : "glass"} onClick={() => setSelectedDomain(null)} className="rounded-full px-6 h-10 gap-2 border-white/5">
-              <LayoutGrid className="w-4 h-4" /> All Domains
-            </Button>
-            {availableDomains.map(d => (
-              <Button key={d.id} variant={selectedDomain === d.id ? "default" : "glass"} onClick={() => setSelectedDomain(d.id)} className={`rounded-full px-6 h-10 gap-2 border-white/5 ${selectedDomain === d.id ? 'bg-primary shadow-lg shadow-primary/20' : ''}`}>
-                <d.icon className="w-4 h-4" /> {d.name}
-              </Button>
-            ))}
-          </div>
-        )}
+
 
 
         {/* Search & Actions Bar */}
@@ -780,123 +768,56 @@ export default function AdminManagementPage() {
                 </div>
               )}
 
-              {adminSession?.role === "super-admin" && selectedDomain === null && selectedBatch === "3rd Year Super 50" ? (
-                availableDomains.map(domain => {
-
-                  const domainStudents = students.filter(s => s.domain === domain.id && s.roll_number.toLowerCase().includes(searchQuery.toLowerCase()));
-                  if (domainStudents.length === 0 && searchQuery) return null;
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredStudents.map(student => {
+                  const score = selectedQuizForGrades ? getStudentScoreForQuiz(student.roll_number, selectedQuizForGrades) : null;
                   return (
-                    <div key={domain.id} className="space-y-4">
-                      <div className="flex items-center gap-3 px-2">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary"><domain.icon className="w-4 h-4" /></div>
-                        <h2 className="text-xl font-bold tracking-tight">{domain.name}</h2>
-                        <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-muted-foreground font-black">{domainStudents.length}</span>
+                    <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group relative overflow-hidden">
+                      <div className="flex items-center gap-4 relative z-10">
+                        <User className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-bold">{student.roll_number}</p>
+                          {isNameConfirmed(student.name, student.roll_number) && (
+                            <p className="text-xs text-muted-foreground">{student.name}</p>
+                          )}
+                          <p className="text-[10px] uppercase font-black text-primary tracking-widest">{student.domain.replace(/-/g, ' ')}</p>
+                          {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Not Attempted</p>}
+                        </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {domainStudents.map(student => {
-                          const score = selectedQuizForGrades ? getStudentScoreForQuiz(student.roll_number, selectedQuizForGrades) : null;
-                          return (
-                            <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group relative overflow-hidden">
-                            <div className="flex items-center gap-4 relative z-10">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                              <div>
-                                <p className="font-bold">{student.roll_number}</p>
-                                {isNameConfirmed(student.name, student.roll_number) && (
-                                  <p className="text-xs text-muted-foreground">{student.name}</p>
-                                )}
-                                {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Not Attempted</p>}
+                      <div className="flex items-center gap-4 relative z-10">
+                        {score !== null ? (
+                          score === -1 ? (
+                            <div className="text-right flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
+                                <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
                               </div>
                             </div>
-                              
-                            <div className="flex items-center gap-4 relative z-10">
-                              {score !== null ? (
-                                score === -1 ? (
-                                  <div className="text-right flex items-center gap-3">
-                                    <div className="text-right">
-                                      <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
-                                      <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="text-right">
-                                    <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                    <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                                  </div>
-                                )
-                              ) : (
-                                selectedQuizForGrades && (
-                                  <div className="text-right">
-                                    <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>
-                                  </div>
-                                )
-                              )}
-                              <Button variant="ghost" onClick={() => handleEditStudent(student)} className="w-8 h-8 p-0 text-primary opacity-0 group-hover:opacity-100 transition-all mr-1" title="Edit Student Name">
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                          ) : (
+                            <div className="text-right">
+                              <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
+                              <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
                             </div>
-                              {score !== null && <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />}
+                          )
+                        ) : (
+                          selectedQuizForGrades && (
+                            <div className="text-right">
+                              <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>
                             </div>
-                          );
-                        })}
+                          )
+                        )}
+                        <Button variant="ghost" onClick={() => handleEditStudent(student)} className="w-8 h-8 p-0 text-primary opacity-0 group-hover:opacity-100 transition-all mr-1" title="Edit Student Name">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
+                      {score !== null && <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />}
                     </div>
                   );
-                })
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredStudents.map(student => {
-                    const score = selectedQuizForGrades ? getStudentScoreForQuiz(student.roll_number, selectedQuizForGrades) : null;
-                    return (
-                      <div key={student.id} className="glass p-5 rounded-2xl border border-white/5 flex items-center justify-between group relative overflow-hidden">
-                        <div className="flex items-center gap-4 relative z-10">
-                          <User className="w-5 h-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-bold">{student.roll_number}</p>
-                            {isNameConfirmed(student.name, student.roll_number) && (
-                              <p className="text-xs text-muted-foreground">{student.name}</p>
-                            )}
-                            <p className="text-[10px] uppercase font-black text-primary tracking-widest">{student.domain}</p>
-                            {score === null && selectedQuizForGrades && <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Not Attempted</p>}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 relative z-10">
-                          {score !== null ? (
-                            score === -1 ? (
-                              <div className="text-right flex items-center gap-3">
-                                <div className="text-right">
-                                  <p className="text-xs font-black text-primary uppercase tracking-widest">Special Access</p>
-                                  <p className="text-[10px] text-muted-foreground font-bold">GRANTED</p>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-right">
-                                <p className={`text-xl font-black ${score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{score}%</p>
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase">Score</p>
-                              </div>
-                            )
-                          ) : (
-                            selectedQuizForGrades && (
-                              <div className="text-right">
-                                <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Not Attempted</p>
-                              </div>
-                            )
-                          )}
-                          <Button variant="ghost" onClick={() => handleEditStudent(student)} className="w-8 h-8 p-0 text-primary opacity-0 group-hover:opacity-100 transition-all mr-1" title="Edit Student Name">
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" onClick={() => removeStudent(student.id)} className="w-8 h-8 p-0 text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        {score !== null && <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                })}
+              </div>
             </motion.div>
           )}
 
@@ -1251,18 +1172,7 @@ export default function AdminManagementPage() {
                     <Input placeholder="e.g. 21471A0501" value={newRollNumber} onChange={(e) => setNewRollNumber(e.target.value.toUpperCase())} className="h-12 bg-white/5 border-white/10 rounded-xl" />
                   </div>
                   
-                  {selectedBatch === "3rd Year Super 50" && adminSession?.role === "super-admin" && (
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Assign Domain</Label>
-                      <select 
-                        value={newStudentDomain} 
-                        onChange={(e) => setNewStudentDomain(e.target.value)}
-                        className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm font-bold outline-none cursor-pointer"
-                      >
-                        {availableDomains.map(d => <option key={d.id} value={d.id} className="bg-[#050505]">{d.name}</option>)}
-                      </select>
-                    </div>
-                  )}
+
 
                   <div className="pt-6 flex gap-4">
                     <Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="flex-1 h-12 rounded-xl font-bold">Cancel</Button>

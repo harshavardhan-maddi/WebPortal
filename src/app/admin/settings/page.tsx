@@ -30,7 +30,7 @@ export default function SettingsPage() {
     name: "",
     email: "",
     password: "",
-    domain: "cyber-security",
+    domain: "3rd-year-super-50",
     batch: "3rd Year Super 50"
   });
   const [requests, setRequests] = useState<any[]>([]);
@@ -203,7 +203,7 @@ export default function SettingsPage() {
         name: "", 
         email: "", 
         password: "", 
-        domain: "cyber-security",
+        domain: "3rd-year-super-50",
         batch: "3rd Year Super 50"
       });
     }
@@ -539,7 +539,7 @@ export default function SettingsPage() {
                         setNewAdmin({
                           ...newAdmin, 
                           batch: batch,
-                          domain: batch === "4th Year Super 50" ? "general" : newAdmin.domain
+                          domain: batch === "4th Year Super 50" ? "general" : "3rd-year-super-50"
                         });
                       }}
                     >
@@ -549,17 +549,9 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Target Domain</Label>
-                    <select 
-                      disabled={newAdmin.batch === "4th Year Super 50"}
-                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      value={newAdmin.domain}
-                      onChange={(e) => setNewAdmin({...newAdmin, domain: e.target.value})}
-                    >
-                      <option value="cyber-security">Cyber Security</option>
-                      <option value="fsd">Full Stack Development</option>
-                      <option value="aiml">AI & ML</option>
-                      <option value="data-science">Data Science</option>
-                    </select>
+                    <div className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 flex items-center text-sm font-bold text-muted-foreground select-none">
+                      {newAdmin.batch === "4th Year Super 50" ? "General Access (4th Year)" : "3rd Year Super 50"}
+                    </div>
                   </div>
                 </div>
 

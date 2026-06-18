@@ -67,7 +67,7 @@ export default function QuizCreationPage() {
       setQuizData(prev => ({ 
         ...prev, 
         batch: initialBatch,
-        domains: ["cyber-security"] 
+        domains: ["3rd-year-super-50"] 
       }));
     }
   }, []);
@@ -250,7 +250,7 @@ export default function QuizCreationPage() {
 
     setIsUploading(true);
     try {
-      const targetDomains = quizData.batch === "4th Year Super 50" ? ["all"] : (quizData.isAllDomains ? ["all"] : quizData.domains);
+      const targetDomains = quizData.batch === "3rd Year Super 50" ? ["3rd-year-super-50"] : ["all"];
       const inserts = targetDomains.map(dom => ({
         title: quizData.title,
         domain: dom,
@@ -328,52 +328,9 @@ export default function QuizCreationPage() {
               
               <div className="space-y-2">
                 <Label>Assigned Domains</Label>
-                {quizData.batch === "3rd Year Super 50" ? (
-                  adminSession?.role === "domain-admin" ? (
-                    <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-primary capitalize">
-                      {quizData.domain.replace('-', ' ')}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-primary/40 transition-all cursor-pointer" onClick={() => setQuizData({...quizData, isAllDomains: !quizData.isAllDomains})}>
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${quizData.isAllDomains ? 'bg-primary border-primary' : 'border-white/20'}`}>
-                          {quizData.isAllDomains && <CheckCircle2 className="w-3 h-3 text-white" />}
-                        </div>
-                        <span className="font-bold text-sm">All Domains</span>
-                      </div>
-                      
-                      {!quizData.isAllDomains && (
-                        <div className="grid grid-cols-2 gap-3">
-                          {[
-                            { id: "cyber-security", name: "Cyber" },
-                            { id: "fsd", name: "FSD" },
-                            { id: "aiml", name: "AI/ML" },
-                            { id: "data-science", name: "Data" },
-                          ].map((dom) => (
-                            <div 
-                              key={dom.id}
-                              onClick={() => {
-                                const newDomains = quizData.domains.includes(dom.id)
-                                  ? quizData.domains.filter(d => d !== dom.id)
-                                  : [...quizData.domains, dom.id];
-                                setQuizData({...quizData, domains: newDomains});
-                              }}
-                              className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                                quizData.domains.includes(dom.id) ? 'bg-primary/10 border-primary text-primary' : 'bg-white/5 border-white/10 text-muted-foreground'
-                              }`}
-                            >
-                              <span className="text-xs font-bold">{dom.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                ) : (
-                  <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-muted-foreground italic">
-                    General Access
-                  </div>
-                )}
+                <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-muted-foreground italic">
+                  {quizData.batch === "3rd Year Super 50" ? "3rd Year Super 50" : "General Access"}
+                </div>
               </div>
             </div>
 

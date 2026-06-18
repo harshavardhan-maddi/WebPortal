@@ -82,8 +82,7 @@ export default function ActiveStatusPage() {
   const filteredStudents = students.filter((s: any) => 
     (s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
      s.roll_number?.toLowerCase().includes(searchQuery.toLowerCase())) &&
-    (s.batch === selectedBatch) &&
-    (selectedDomain && selectedBatch === "3rd Year Super 50" ? s.domain === selectedDomain : true)
+    (s.batch === selectedBatch)
   );
 
 
@@ -154,21 +153,7 @@ export default function ActiveStatusPage() {
           />
         </div>
         
-        {selectedBatch === "3rd Year Super 50" && adminSession?.role === "super-admin" && (
-          <div className="flex gap-2">
-            {['cyber-security', 'fsd', 'aiml', 'data-science'].map((dom) => (
-              <button
-                key={dom}
-                onClick={() => setSelectedDomain(selectedDomain === dom ? null : dom)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black border transition-all ${
-                  selectedDomain === dom ? 'bg-primary border-primary text-white' : 'bg-white/5 border-white/10 text-muted-foreground hover:border-white/20'
-                }`}
-              >
-                {dom.replace('-', ' ').toUpperCase()}
-              </button>
-            ))}
-          </div>
-        )}
+
 
       </div>
 
