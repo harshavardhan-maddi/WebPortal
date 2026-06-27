@@ -25,7 +25,8 @@ import {
   Award,
   FileText,
   TrendingDown,
-  CheckCircle
+  CheckCircle,
+  Code
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,7 @@ export default function StudentDashboard() {
   const [showRankNotification, setShowRankNotification] = useState(false);
   const [notificationText, setNotificationText] = useState("");
   const [activeTab, setActiveTab] = useState<"assessments" | "reports">("assessments");
+  const [showCodeTracker, setShowCodeTracker] = useState(false);
   const [allStudentRankings, setAllStudentRankings] = useState<any[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [myCredits, setMyCredits] = useState<number>(0);
@@ -512,6 +514,13 @@ export default function StudentDashboard() {
                 }`}
               >
                 Reports
+              </button>
+              <button
+                onClick={() => setShowCodeTracker(true)}
+                className="px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all text-muted-foreground hover:text-white flex items-center gap-1.5"
+              >
+                <Code className="w-3.5 h-3.5" />
+                Code Tracker
               </button>
             </div>
             <div className="glass px-4 py-2.5 rounded-xl border border-white/5 flex items-center gap-2">
@@ -1314,6 +1323,51 @@ export default function StudentDashboard() {
                   </div>
                 </div>
               )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Code Tracker Floating Window Modal */}
+      <AnimatePresence>
+        {showCodeTracker && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-[94vw] h-[88vh] max-w-7xl glass rounded-[2rem] border border-white/10 shadow-2xl relative overflow-hidden flex flex-col bg-[#05060f]/95"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 md:px-8 md:py-5 border-b border-white/10 bg-white/[0.02]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <Code className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg md:text-xl font-black text-white">Code Tracker</h3>
+                    <p className="text-[10px] md:text-xs text-muted-foreground">Monitor and track your programming challenges</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowCodeTracker(false)}
+                  className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-muted-foreground hover:text-white font-bold"
+                  aria-label="Close Code Tracker"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Iframe Body */}
+              <div className="flex-1 bg-black/40 relative">
+                <iframe
+                  src="https://student-tracker-whso.onrender.com/"
+                  className="w-full h-full border-none"
+                  title="Code Tracker"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
             </motion.div>
           </div>
         )}
