@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Download } from "lucide-react";
+import { Search, Download, X } from "lucide-react";
 import * as XLSX from "xlsx";
 
 /**
@@ -30,8 +30,40 @@ export default function CodingChallengePage() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [newDomain, setNewDomain] = useState("");
-  const [newDescription, setNewDescription] = useState("");
+  const [newDomain, setNewDomain] = useState("coding");
+  
+  // Custom Coding Challenge Fields
+  const [problemStatement, setProblemStatement] = useState("");
+  const [inputFormat, setInputFormat] = useState("");
+  const [outputFormat, setOutputFormat] = useState("");
+  const [sampleInput, setSampleInput] = useState("");
+  const [sampleOutput, setSampleOutput] = useState("");
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["python", "javan"]);
+  
+  // Enforced 4 test cases
+  const [testCases, setTestCases] = useState<any[]>([
+    { input: "", output: "", isHidden: false },
+    { input: "", output: "", isHidden: false },
+    { input: "", output: "", isHidden: true },
+    { input: "", output: "", isHidden: true }
+  ]);
+
+  const resetForm = () => {
+    setNewTitle("");
+    setNewDomain("coding");
+    setProblemStatement("");
+    setInputFormat("");
+    setOutputFormat("");
+    setSampleInput("");
+    setSampleOutput("");
+    setSelectedLanguages(["python", "javan"]);
+    setTestCases([
+      { input: "", output: "", isHidden: false },
+      { input: "", output: "", isHidden: false },
+      { input: "", output: "", isHidden: true },
+      { input: "", output: "", isHidden: true }
+    ]);
+  };
 // Handle PDF upload and extract properties
 const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
@@ -48,7 +80,7 @@ const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (result.success) {
       setPdfData(result.data);
       // Optionally prefill new challenge fields from PDF
-      if (result.data.problemStatement) setNewDescription(result.data.problemStatement);
+      if (result.data.problemStatement) setProblemStatement(result.data.problemStatement);
       if (result.data.title) setNewTitle(result.data.title || "");
       if (result.data.domain) setNewDomain(result.data.domain || "");
     } else {
@@ -63,29 +95,50 @@ const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
 // Handle creating a new coding challenge
 const handleAddChallenge = async () => {
+  if (!newTitle.trim() || !problemStatement.trim()) {
+    alert("Please fill in at least the Title and Problem Statement.");
+    return;
+  }
+
   try {
+    const today = new Date().toISOString().split("T")[0];
+    
+    // Construct the single coding question
+    const question = {
+      type: "CODING",
+      text: newTitle,
+      problemStatement,
+      inputFormat,
+      outputFormat,
+      sampleInput,
+      sampleOutput,
+      languages: selectedLanguages,
+      testCases
+    };
+
     const { error } = await supabase.from('quizzes').insert([
       {
-        title: newTitle,
-        domain: newDomain,
-        description: newDescription,
+        title: `Coding: ${newTitle}`, // prefix Coding: to trigger Coding results list filter
+        domain: newDomain || "coding",
+        batch: "3rd Year Super 50",
+        date: today,
+        time: "00:00",
+        end_time: "23:59",
+        questions: [question]
       },
     ]);
     if (error) {
       console.error('Failed to create challenge:', error);
+      alert(`Failed to create challenge: ${error.message}`);
       return;
     }
-    // Reset form and close modal
-    setNewTitle('');
-    setNewDomain('');
-    setNewDescription('');
+    
+    resetForm();
     setShowAddModal(false);
-    // Refresh results – re-fetch
-    // Simple re-fetch by calling fetchResults (need to expose it)
-    // For now, reload page
     window.location.reload();
-  } catch (err) {
+  } catch (err: any) {
     console.error('Add challenge error:', err);
+    alert(`Error: ${err.message}`);
   }
 };
   // Fetch coding challenge results from Supabase
@@ -225,23 +278,175 @@ const handleAddChallenge = async () => {
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur">
-          <div className="bg-[#02030a] p-6 rounded-lg w-full max-w-md shadow-lg">
-            <h2 className="text-xl font-bold mb-4 text-purple-400">Add New Coding Challenge</h2>
-            <div className="space-y-3">
-              <Input placeholder="Title" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
-              <Input placeholder="Domain (e.g., frontend)" value={newDomain} onChange={e => setNewDomain(e.target.value)} />
-              <textarea
-                placeholder="Description"
-                value={newDescription}
-                onChange={e => setNewDescription(e.target.value)}
-                className="w-full p-2 bg-white/5 rounded"
-                rows={4}
-              />
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
-                <Button onClick={handleAddChallenge}>Create</Button>
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur z-50 overflow-y-auto py-10">
+          <div className="bg-[#02030a] border border-white/5 p-8 rounded-[2.5rem] w-full max-w-4xl shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto premium-scroll relative text-white">
+            <button 
+              onClick={() => { setShowAddModal(false); resetForm(); }}
+              className="absolute top-6 right-6 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="border-b border-white/5 pb-4">
+              <h2 className="text-2xl font-black text-purple-400">Create Coding Challenge</h2>
+              <p className="text-xs text-muted-foreground mt-1">Fill in the fields to deploy a new code evaluation assessment.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              {/* Left Column: Basic Details */}
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Challenge Title</label>
+                  <Input placeholder="e.g. Sum of Two Numbers" value={newTitle} onChange={e => setNewTitle(e.target.value)} className="h-11 bg-white/5 border-white/10 rounded-xl" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Domain / Category Tag</label>
+                  <Input placeholder="e.g. coding, frontend" value={newDomain} onChange={e => setNewDomain(e.target.value)} className="h-11 bg-white/5 border-white/10 rounded-xl" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Problem Statement</label>
+                  <textarea
+                    placeholder="Describe the task, requirements, and constraints..."
+                    value={problemStatement}
+                    onChange={e => setProblemStatement(e.target.value)}
+                    className="w-full h-36 p-3 bg-white/5 border border-white/10 rounded-xl text-sm focus:ring-1 ring-purple-400 outline-none resize-none text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Input Format</label>
+                    <textarea
+                      placeholder="Describe the standard input..."
+                      value={inputFormat}
+                      onChange={e => setInputFormat(e.target.value)}
+                      className="w-full h-24 p-3 bg-white/5 border border-white/10 rounded-xl text-xs focus:ring-1 ring-purple-400 outline-none resize-none text-white"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Output Format</label>
+                    <textarea
+                      placeholder="Describe the expected output..."
+                      value={outputFormat}
+                      onChange={e => setOutputFormat(e.target.value)}
+                      className="w-full h-24 p-3 bg-white/5 border border-white/10 rounded-xl text-xs focus:ring-1 ring-purple-400 outline-none resize-none text-white"
+                    />
+                  </div>
+                </div>
               </div>
+
+              {/* Right Column: Examples & Languages */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Sample Input</label>
+                    <textarea
+                      placeholder="e.g. 5 10"
+                      value={sampleInput}
+                      onChange={e => setSampleInput(e.target.value)}
+                      className="w-full h-24 p-3 bg-white/5 border border-white/10 rounded-xl font-mono text-xs focus:ring-1 ring-purple-400 outline-none resize-none text-white"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Sample Output</label>
+                    <textarea
+                      placeholder="e.g. 15"
+                      value={sampleOutput}
+                      onChange={e => setSampleOutput(e.target.value)}
+                      className="w-full h-24 p-3 bg-white/5 border border-white/10 rounded-xl font-mono text-xs focus:ring-1 ring-purple-400 outline-none resize-none text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Allowed Programming Languages</label>
+                  <div className="flex gap-4">
+                    {["python", "javan"].map((lang) => {
+                      const isSelected = selectedLanguages.includes(lang);
+                      return (
+                        <button
+                          key={lang}
+                          type="button"
+                          onClick={() => {
+                            setSelectedLanguages(prev => 
+                              prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
+                            );
+                          }}
+                          className={`px-5 py-2 rounded-full border text-xs font-black uppercase transition-all ${
+                            isSelected 
+                              ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
+                              : 'bg-white/5 border-white/10 text-muted-foreground hover:text-white'
+                          }`}
+                        >
+                          {lang === "python" ? "Python" : "Java"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Enforced 4 test cases */}
+                <div className="space-y-3 pt-2 border-t border-white/5">
+                  <label className="text-[10px] font-bold uppercase text-purple-400 tracking-wider block">Evaluation Test Cases (4 Required)</label>
+                  
+                  <div className="space-y-3 max-h-[190px] overflow-y-auto premium-scroll pr-1">
+                    {testCases.map((tc, tcIndex) => {
+                      const isHidden = tcIndex >= 2;
+                      return (
+                        <div key={tcIndex} className={`p-3 rounded-xl border bg-black/40 space-y-2 text-xs ${
+                          isHidden ? 'border-yellow-500/10' : 'border-white/5'
+                        }`}>
+                          <div className="flex justify-between items-center text-[10px] font-bold uppercase">
+                            <span className={isHidden ? 'text-yellow-500/80' : 'text-slate-400'}>
+                              {isHidden ? `🔒 Hidden Test Case #${tcIndex + 1}` : `👁️ Visible Test Case #${tcIndex + 1}`}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              placeholder="Input value"
+                              value={tc.input}
+                              onChange={(e) => {
+                                const updated = [...testCases];
+                                updated[tcIndex].input = e.target.value;
+                                setTestCases(updated);
+                              }}
+                              className="h-8 px-2 bg-white/5 border border-white/5 rounded font-mono text-[10px] focus:outline-none text-white"
+                            />
+                            <input
+                              placeholder="Expected Output"
+                              value={tc.output}
+                              onChange={(e) => {
+                                const updated = [...testCases];
+                                updated[tcIndex].output = e.target.value;
+                                setTestCases(updated);
+                              }}
+                              className="h-8 px-2 bg-white/5 border border-white/5 rounded font-mono text-[10px] focus:outline-none text-white"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+              <Button 
+                variant="outline" 
+                onClick={() => { setShowAddModal(false); resetForm(); }}
+                className="h-11 rounded-xl px-6 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAddChallenge}
+                className="h-11 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 shadow-lg shadow-purple-500/15"
+              >
+                Create Challenge
+              </Button>
             </div>
           </div>
         </div>
