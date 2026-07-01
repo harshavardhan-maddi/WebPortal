@@ -163,6 +163,7 @@ export default function ActiveQuizPage() {
   const [interpreterInput, setInterpreterInput] = useState("");
   const [interpreterHistory, setInterpreterHistory] = useState<{ command: string; output: string }[]>([]);
   const [isInterpreterLoading, setIsInterpreterLoading] = useState(false);
+  const [expandedTestCase, setExpandedTestCase] = useState<Record<number, number | null>>({}); // question index -> test case index
 
   // Clear interpreter when switching questions
   useEffect(() => {
@@ -654,6 +655,28 @@ export default function ActiveQuizPage() {
   // Submit assessment
   const handleSubmit = useCallback(async () => {
     if (isSubmitting || !attemptId) return;
+
+    // Validate that all test cases are passed for coding challenges (only for manual submission when time remains)
+    if (timeLeft > 0) {
+      let allCodingPassed = true;
+      let failedChallengeIndices: number[] = [];
+
+      questions.forEach((q, idx) => {
+        if (q.type === "CODING") {
+          const total = q.testCases?.length || 0;
+          const passed = testResults[idx]?.passed || 0;
+          if (passed < total || total === 0) {
+            allCodingPassed = false;
+            failedChallengeIndices.push(idx + 1);
+          }
+        }
+      });
+
+      if (!allCodingPassed) {
+        alert(`Cannot submit assessment. You must pass all 4 test cases for all coding challenges. Incomplete coding challenges: Question(s) ${failedChallengeIndices.join(", ")}.`);
+        return;
+      }
+    }
     
     setIsSubmitting(true);
     
@@ -1096,30 +1119,78 @@ export default function ActiveQuizPage() {
                             </div>
 
                             <div className="space-y-2">
-                              {testResults[currentQuestionIndex]?.details?.map((res, rIdx) => (
-                                <div key={rIdx} className={`p-3 rounded-xl border flex items-center justify-between ${
-                                  res.passed 
-                                    ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400" 
-                                    : "bg-red-500/5 border-red-500/20 text-red-400"
-                                }`}>
-                                  <div className="flex items-center gap-3">
-                                    {res.passed ? <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" /> : <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
-                                    <span className="font-bold">Test Case #{res.index}</span>
-                                  </div>
-                                  
-                                  <div className="text-[10px] flex items-center gap-3">
-                                    {res.success ? (
-                                      res.passed ? (
-                                        <span className="font-bold uppercase tracking-widest text-emerald-400">PASSED</span>
-                                      ) : (
-                                        <span className="font-bold uppercase tracking-widest text-red-400">FAILED (Mismatch)</span>
-                                      )
-                                    ) : (
-                                      <span className="font-bold uppercase tracking-widest text-red-500">RUNTIME ERROR</span>
+                              {testResults[currentQuestionIndex]?.details?.map((res, rIdx) => {
+                                const isHidden = res.isHidden;
+                                const isExpanded = expandedTestCase[currentQuestionIndex] === rIdx;
+                                return (
+                                  <div key={rIdx} className={`rounded-xl border flex flex-col overflow-hidden transition-all ${
+                                    res.passed 
+                                      ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400" 
+                                      : "bg-red-500/5 border-red-500/20 text-red-400"
+                                  }`}>
+                                    <div 
+                                      onClick={() => {
+                                        setExpandedTestCase(prev => ({
+                                          ...prev,
+                                          [currentQuestionIndex]: isExpanded ? null : rIdx
+                                        }));
+                                      }}
+                                      className="p-3 flex items-center justify-between cursor-pointer hover:bg-white/5 select-none"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        {res.passed ? <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" /> : <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
+                                        <span className="font-bold text-xs">
+                                          {isHidden ? `🔒 Hidden Test Case #${res.index} (Private)` : `👁️ Visible Test Case #${res.index} (Public)`}
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="text-[10px] flex items-center gap-3 font-mono">
+                                        {res.success ? (
+                                          res.passed ? (
+                                            <span className="font-bold uppercase tracking-widest text-emerald-400">PASSED</span>
+                                          ) : (
+                                            <span className="font-bold uppercase tracking-widest text-red-400">FAILED (Mismatch)</span>
+                                          )
+                                        ) : (
+                                          <span className="font-bold uppercase tracking-widest text-red-500">RUNTIME ERROR</span>
+                                        )}
+                                        <span className="text-slate-500 text-xs">{isExpanded ? "▲" : "▼"}</span>
+                                      </div>
+                                    </div>
+
+                                    {isExpanded && (
+                                      <div className="px-4 pb-4 pt-2 border-t border-white/5 bg-black/20 text-[11px] font-mono space-y-2">
+                                        {isHidden ? (
+                                          <div className="text-slate-500 italic text-center py-2 text-[10px]">
+                                            🔒 This is a hidden evaluation test case. Inputs and expected outputs are private to prevent hardcoding.
+                                          </div>
+                                        ) : (
+                                          <div className="grid grid-cols-3 gap-4">
+                                            <div className="space-y-1">
+                                              <span className="text-[9px] uppercase font-bold text-slate-500">Input</span>
+                                              <pre className="p-2 bg-black/40 border border-white/5 rounded text-slate-300 overflow-x-auto whitespace-pre-wrap">{res.input || "(no input)"}</pre>
+                                            </div>
+                                            <div className="space-y-1">
+                                              <span className="text-[9px] uppercase font-bold text-slate-500">Expected Output</span>
+                                              <pre className="p-2 bg-black/40 border border-white/5 rounded text-slate-300 overflow-x-auto whitespace-pre-wrap">{res.expected || "(no output)"}</pre>
+                                            </div>
+                                            <div className="space-y-1">
+                                              <span className="text-[9px] uppercase font-bold text-slate-500">Your Output</span>
+                                              {res.success ? (
+                                                <pre className={`p-2 bg-black/40 border rounded overflow-x-auto whitespace-pre-wrap ${
+                                                  res.passed ? "border-emerald-500/20 text-emerald-400" : "border-red-500/20 text-red-400"
+                                                }`}>{res.output || "(no output)"}</pre>
+                                              ) : (
+                                                <pre className="p-2 bg-red-950/20 border border-red-500/20 rounded text-red-400 overflow-x-auto whitespace-pre-wrap">{res.error}</pre>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
 
                               {!testResults[currentQuestionIndex] && (
                                 <div className="text-center py-6 text-muted-foreground italic font-sans">

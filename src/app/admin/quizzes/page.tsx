@@ -204,8 +204,13 @@ export default function QuizCreationPage() {
         outputFormat: "",
         sampleInput: "",
         sampleOutput: "",
-        languages: ["javascript", "python"],
-        testCases: [{ input: "", output: "" }]
+        languages: ["python", "javan"],
+        testCases: [
+          { input: "", output: "", isHidden: false },
+          { input: "", output: "", isHidden: false },
+          { input: "", output: "", isHidden: true },
+          { input: "", output: "", isHidden: true }
+        ]
       }]);
     } else {
       setQuestions([...questions, {
@@ -376,8 +381,13 @@ export default function QuizCreationPage() {
                     outputFormat: "",
                     sampleInput: "",
                     sampleOutput: "",
-                    languages: ["javascript", "python"],
-                    testCases: [{ input: "", output: "" }]
+                    languages: ["python", "javan"],
+                    testCases: [
+                      { input: "", output: "", isHidden: false },
+                      { input: "", output: "", isHidden: false },
+                      { input: "", output: "", isHidden: true },
+                      { input: "", output: "", isHidden: true }
+                    ]
                   }]); 
                   setStep(3); 
                 }} 
@@ -480,7 +490,7 @@ export default function QuizCreationPage() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Allowed Programming Languages</Label>
                       <div className="flex flex-wrap gap-4 mt-2">
-                        {["javascript", "python", "c", "cpp", "java", "javan"].map((lang) => {
+                        {["python", "javan"].map((lang) => {
                           const isSelected = q.languages?.includes(lang);
                           return (
                             <button
@@ -499,7 +509,7 @@ export default function QuizCreationPage() {
                                   : 'bg-white/5 border-white/10 text-muted-foreground hover:text-white'
                               }`}
                             >
-                              {lang === "cpp" ? "C++" : lang === "javan" ? "Java 17 (Javan)" : lang}
+                              {lang === "python" ? "Python" : "Java"}
                             </button>
                           );
                         })}
@@ -507,71 +517,72 @@ export default function QuizCreationPage() {
                     </div>
 
                     {/* Dynamic Test Cases Block */}
+                    {/* Fixed 4 Test Cases Block */}
                     <div className="space-y-4 pt-4 border-t border-white/5">
                       <div className="flex justify-between items-center">
-                        <Label className="text-sm font-black uppercase text-purple-400">Test Cases ({q.testCases?.length || 0})</Label>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          onClick={() => {
-                            const currentTestCases = q.testCases || [];
-                            updateQuestion(qIndex, "testCases", [...currentTestCases, { input: "", output: "" }]);
-                          }}
-                          className="h-10 rounded-xl px-4 text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500 hover:text-white transition-all font-bold"
-                        >
-                          <Plus className="w-4 h-4 mr-2" /> Add Test Case
-                        </Button>
+                        <Label className="text-sm font-black uppercase text-purple-400">Test Cases (Enforced 4 Cases: 2 Visible, 2 Hidden)</Label>
                       </div>
 
                       <div className="space-y-4">
-                        {q.testCases?.map((tc: any, tcIndex: number) => (
-                          <div key={tcIndex} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 relative group">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-bold text-muted-foreground uppercase">Test Case #{tcIndex + 1}</span>
-                              {q.testCases.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const filtered = q.testCases.filter((_: any, idx: number) => idx !== tcIndex);
-                                    updateQuestion(qIndex, "testCases", filtered);
-                                  }}
-                                  className="text-red-400 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 text-xs font-bold uppercase tracking-wider"
-                                >
-                                  Delete Case
-                                </button>
-                              )}
-                            </div>
+                        {Array.from({ length: 4 }).map((_, tcIndex) => {
+                          // Ensure the test case exists at this index, otherwise initialize it
+                          const tc = q.testCases?.[tcIndex] || { input: "", output: "", isHidden: tcIndex >= 2 };
+                          const isHidden = tcIndex >= 2;
+                          return (
+                            <div key={tcIndex} className={`p-5 rounded-2xl bg-white/5 border space-y-3 relative group ${
+                              isHidden ? 'border-yellow-500/10' : 'border-white/10'
+                            }`}>
+                              <div className="flex justify-between items-center">
+                                <span className={`text-xs font-bold uppercase ${
+                                  isHidden ? 'text-yellow-500/80' : 'text-purple-400/80'
+                                }`}>
+                                  {isHidden ? `🔒 Hidden Test Case #${tcIndex + 1} (Private)` : `👁️ Visible Test Case #${tcIndex + 1} (Public)`}
+                                </span>
+                              </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <Label className="text-[10px] font-bold text-muted-foreground uppercase">Inputs</Label>
-                                <textarea
-                                  placeholder="Inputs for execution..."
-                                  value={tc.input}
-                                  onChange={(e) => {
-                                    const updatedTC = [...q.testCases];
-                                    updatedTC[tcIndex].input = e.target.value;
-                                    updateQuestion(qIndex, "testCases", updatedTC);
-                                  }}
-                                  className="w-full h-16 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs focus:ring-1 ring-purple-400 outline-none"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-[10px] font-bold text-muted-foreground uppercase">Expected Output</Label>
-                                <textarea
-                                  placeholder="Expected exact stdout..."
-                                  value={tc.output}
-                                  onChange={(e) => {
-                                    const updatedTC = [...q.testCases];
-                                    updatedTC[tcIndex].output = e.target.value;
-                                    updateQuestion(qIndex, "testCases", updatedTC);
-                                  }}
-                                  className="w-full h-16 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs focus:ring-1 ring-purple-400 outline-none"
-                                />
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] font-bold text-muted-foreground uppercase">Inputs</Label>
+                                  <textarea
+                                    placeholder="Inputs for execution..."
+                                    value={tc.input}
+                                    onChange={(e) => {
+                                      const updatedTC = [...(q.testCases || [])];
+                                      // Ensure all 4 test cases are initialized
+                                      for (let i = 0; i < 4; i++) {
+                                        if (!updatedTC[i]) {
+                                          updatedTC[i] = { input: "", output: "", isHidden: i >= 2 };
+                                        }
+                                      }
+                                      updatedTC[tcIndex].input = e.target.value;
+                                      updateQuestion(qIndex, "testCases", updatedTC);
+                                    }}
+                                    className="w-full h-16 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs focus:ring-1 ring-purple-400 outline-none"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] font-bold text-muted-foreground uppercase">Expected Output</Label>
+                                  <textarea
+                                    placeholder="Expected exact stdout..."
+                                    value={tc.output}
+                                    onChange={(e) => {
+                                      const updatedTC = [...(q.testCases || [])];
+                                      // Ensure all 4 test cases are initialized
+                                      for (let i = 0; i < 4; i++) {
+                                        if (!updatedTC[i]) {
+                                          updatedTC[i] = { input: "", output: "", isHidden: i >= 2 };
+                                        }
+                                      }
+                                      updatedTC[tcIndex].output = e.target.value;
+                                      updateQuestion(qIndex, "testCases", updatedTC);
+                                    }}
+                                    className="w-full h-16 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs focus:ring-1 ring-purple-400 outline-none"
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
