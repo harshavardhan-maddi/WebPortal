@@ -480,7 +480,7 @@ export default function QuizCreationPage() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Allowed Programming Languages</Label>
                       <div className="flex flex-wrap gap-4 mt-2">
-                        {["javascript", "python", "c", "cpp", "java"].map((lang) => {
+                        {["javascript", "python", "c", "cpp", "java", "javan"].map((lang) => {
                           const isSelected = q.languages?.includes(lang);
                           return (
                             <button
@@ -499,7 +499,7 @@ export default function QuizCreationPage() {
                                   : 'bg-white/5 border-white/10 text-muted-foreground hover:text-white'
                               }`}
                             >
-                              {lang === "cpp" ? "C++" : lang}
+                              {lang === "cpp" ? "C++" : lang === "javan" ? "Java 17 (Javan)" : lang}
                             </button>
                           );
                         })}

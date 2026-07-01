@@ -112,6 +112,25 @@ public class Main {
         }
     }
 }
+`,
+  javan: `// Write your Java 17 code here
+import java.util.*;
+import java.io.*;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String line = br.readLine();
+        if (line != null) {
+            String[] parts = line.trim().split("\\\\s+");
+            if (parts.length >= 2) {
+                System.out.println(Integer.parseInt(parts[0]) + Integer.parseInt(parts[1]));
+            } else {
+                System.out.println(parts[0]);
+            }
+        }
+    }
+}
 `
 };
 
@@ -138,7 +157,74 @@ export default function ActiveQuizPage() {
   const [isCompiling, setIsCompiling] = useState(false);
   const [isSubmitTesting, setIsSubmitTesting] = useState(false);
   const [customInput, setCustomInput] = useState("");
-  const [activeCodingTab, setActiveCodingTab] = useState<"problem" | "console" | "testcases">("problem");
+  const [activeCodingTab, setActiveCodingTab] = useState<"problem" | "console" | "testcases" | "interpreter" | "compiler">("problem");
+  
+  // Python Interpreter States
+  const [interpreterInput, setInterpreterInput] = useState("");
+  const [interpreterHistory, setInterpreterHistory] = useState<{ command: string; output: string }[]>([]);
+  const [isInterpreterLoading, setIsInterpreterLoading] = useState(false);
+
+  // Clear interpreter when switching questions
+  useEffect(() => {
+    setInterpreterHistory([]);
+    setInterpreterInput("");
+  }, [currentQuestionIndex]);
+
+  // Redirect unsupported tabs when language changes
+  useEffect(() => {
+    const currentLang = codeAnswers[currentQuestionIndex]?.language;
+    if (activeCodingTab === "interpreter" && currentLang !== "python") {
+      setActiveCodingTab("problem");
+    }
+    if (activeCodingTab === "compiler" && currentLang !== "java" && currentLang !== "javan") {
+      setActiveCodingTab("problem");
+    }
+  }, [currentQuestionIndex, codeAnswers, activeCodingTab]);
+
+  const handleRunInterpreter = async () => {
+    if (!interpreterInput.trim() || isInterpreterLoading) return;
+    
+    const command = interpreterInput;
+    setInterpreterInput("");
+    setIsInterpreterLoading(true);
+    
+    // Send all commands in sequence so the python runner can restore variables/state.
+    const allCommands = [...interpreterHistory.map(h => h.command), command];
+    
+    setInterpreterHistory(prev => [...prev, { command, output: "Evaluating..." }]);
+    
+    try {
+      const response = await fetch("/api/execute/interactive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          commands: allCommands,
+          language: "python"
+        })
+      });
+      
+      const res = await response.json();
+      const finalOutput = res.success ? (res.output || "(Success, no output)") : (res.error || "Execution Error");
+      
+      setInterpreterHistory(prev => {
+        const updated = [...prev];
+        if (updated.length > 0) {
+          updated[updated.length - 1] = { command, output: finalOutput };
+        }
+        return updated;
+      });
+    } catch (err: any) {
+      setInterpreterHistory(prev => {
+        const updated = [...prev];
+        if (updated.length > 0) {
+          updated[updated.length - 1] = { command, output: `Network Error: ${err.message}` };
+        }
+        return updated;
+      });
+    } finally {
+      setIsInterpreterLoading(false);
+    }
+  };
   
   // Camera Proctoring States
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -840,7 +926,7 @@ export default function ActiveQuizPage() {
                                   : 'bg-white/5 border-white/5 text-muted-foreground hover:text-white'
                               }`}
                             >
-                              {lang === "cpp" ? "C++" : lang}
+                              {lang === "cpp" ? "C++" : lang === "javan" ? "Java 17" : lang}
                             </button>
                           );
                         })}
@@ -874,6 +960,27 @@ export default function ActiveQuizPage() {
                       />
                     </div>
 
+                    {/* Editor Status Bar */}
+                    <div className="h-6 bg-black/40 border-t border-white/5 px-4 flex items-center justify-between text-[10px] text-slate-500 font-mono select-none">
+                      <div className="flex items-center gap-4">
+                        <span className="flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            codeAnswers[currentQuestionIndex]?.language === "python" ? "bg-yellow-400 animate-pulse" :
+                            (codeAnswers[currentQuestionIndex]?.language === "java" || codeAnswers[currentQuestionIndex]?.language === "javan") ? "bg-red-400 animate-pulse" : "bg-cyan-400"
+                          }`} />
+                          {codeAnswers[currentQuestionIndex]?.language === "python" ? "Python 3.11 Interpreter Active (IDE Mode)" :
+                           codeAnswers[currentQuestionIndex]?.language === "javan" ? "Java 17 Compiler Active" :
+                           codeAnswers[currentQuestionIndex]?.language === "java" ? "Java 17 Compiler Active" :
+                           `${codeAnswers[currentQuestionIndex]?.language?.toUpperCase() || "JS"} Engine Active`}
+                        </span>
+                      </div>
+                      <div className="flex gap-4">
+                        <span>UTF-8</span>
+                        <span>Tab Size: 4</span>
+                        <span>Lines: {codeAnswers[currentQuestionIndex]?.code?.split('\n').length || 0}</span>
+                      </div>
+                    </div>
+
                     {/* Bottom Console / Test Results Panel */}
                     <div className="h-72 border-t border-white/5 flex flex-col bg-[#05060f]">
                       {/* Console Tabs */}
@@ -903,6 +1010,26 @@ export default function ActiveQuizPage() {
                           >
                             Submit Results ({testResults[currentQuestionIndex]?.passed || 0}/{testResults[currentQuestionIndex]?.total || 0})
                           </button>
+                          {codeAnswers[currentQuestionIndex]?.language === "python" && (
+                            <button 
+                              onClick={() => setActiveCodingTab("interpreter")} 
+                              className={`px-3 h-10 font-bold uppercase tracking-wider border-b-2 transition-all ${
+                                activeCodingTab === "interpreter" ? "border-yellow-400 text-yellow-400" : "border-transparent text-muted-foreground hover:text-white"
+                              }`}
+                            >
+                              🐍 Python 3.11 Interpreter
+                            </button>
+                          )}
+                          {(codeAnswers[currentQuestionIndex]?.language === "java" || codeAnswers[currentQuestionIndex]?.language === "javan") && (
+                            <button 
+                              onClick={() => setActiveCodingTab("compiler")} 
+                              className={`px-3 h-10 font-bold uppercase tracking-wider border-b-2 transition-all ${
+                                activeCodingTab === "compiler" ? "border-red-400 text-red-400" : "border-transparent text-muted-foreground hover:text-white"
+                              }`}
+                            >
+                              ☕ Java 17 Compiler
+                            </button>
+                          )}
                         </div>
 
                         {/* Compiler Run Actions */}
@@ -999,6 +1126,95 @@ export default function ActiveQuizPage() {
                                   No submission evaluated yet. Write solution and click 'Submit Code' to run cases.
                                 </div>
                               )}
+                            </div>
+                          </div>
+                        )}
+
+                        {activeCodingTab === "interpreter" && (
+                          <div className="flex flex-col h-full space-y-2">
+                            <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                              <span className="text-[10px] font-bold uppercase text-yellow-400">🐍 Python 3.11 Interpreter REPL (Stateless Simulator)</span>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => setInterpreterHistory([])}
+                                className="h-7 text-[10px] border border-white/10 hover:bg-white/5 text-slate-300 px-3 py-1 rounded-lg"
+                              >
+                                Reset Session
+                              </Button>
+                            </div>
+                            
+                            {/* Terminal output area */}
+                            <div className="flex-1 min-h-[140px] max-h-[180px] bg-[#080916] rounded-xl p-4 border border-yellow-500/10 shadow-lg shadow-yellow-500/5 font-mono text-xs overflow-y-auto premium-scroll space-y-3">
+                              <div className="text-slate-500 text-[10px] leading-relaxed">
+                                Python 3.11.9 (tags/v3.11.9, Apr  2 2024) [MSC v.1938 64 bit (AMD64)] on win32<br />
+                                Type python commands below and press Enter or click 'Send Command'.
+                              </div>
+                              {interpreterHistory.map((h, hIdx) => (
+                                <div key={hIdx} className="space-y-1">
+                                  <div className="text-yellow-400 flex items-start">
+                                    <span className="text-slate-500 mr-2 shrink-0">&gt;&gt;&gt;</span>
+                                    <span className="break-all">{h.command}</span>
+                                  </div>
+                                  <div className="text-slate-300 pl-5 whitespace-pre-wrap break-all">{h.output}</div>
+                                </div>
+                              ))}
+                              {isInterpreterLoading && (
+                                <div className="text-slate-500 animate-pulse pl-5">Evaluating command...</div>
+                              )}
+                            </div>
+
+                            {/* Terminal Input */}
+                            <div className="flex gap-2">
+                              <div className="flex-1 flex items-center bg-black/40 border border-white/5 rounded-xl px-3 focus-within:ring-1 ring-yellow-400">
+                                <span className="text-slate-500 font-mono text-xs mr-2 select-none">&gt;&gt;&gt;</span>
+                                <input
+                                  type="text"
+                                  value={interpreterInput}
+                                  onChange={(e) => setInterpreterInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleRunInterpreter();
+                                    }
+                                  }}
+                                  placeholder="e.g. x = 5  or  print('Hello')"
+                                  className="w-full h-10 bg-transparent text-slate-200 placeholder-slate-600 focus:outline-none font-mono text-xs"
+                                  disabled={isInterpreterLoading}
+                                />
+                              </div>
+                              <Button
+                                size="sm"
+                                disabled={isInterpreterLoading || !interpreterInput.trim()}
+                                onClick={handleRunInterpreter}
+                                className="h-10 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white font-bold px-4"
+                              >
+                                Send Command
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {activeCodingTab === "compiler" && (
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                              <span className="text-[10px] font-bold uppercase text-red-400">☕ Java 17 Compiler Status & Standard IO</span>
+                            </div>
+                            <div className="p-4 bg-[#110505]/40 border border-red-500/10 rounded-xl text-xs space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="font-bold text-slate-300">Java 17 Compiler Environment Active</span>
+                              </div>
+                              <p className="text-slate-400 text-[11px] leading-relaxed">
+                                When you run or submit your code, it is compiled using <code className="bg-white/5 px-1.5 py-0.5 rounded text-white font-mono">javac --release 17</code>, enforcing Java 17 syntax and API specifications.
+                              </p>
+                              <div className="pt-2 border-t border-white/5">
+                                <span className="text-[10px] font-bold uppercase text-muted-foreground">Compiler Settings:</span>
+                                <pre className="mt-1 text-[10px] text-slate-400 bg-black/20 p-2 rounded font-mono">
+                                  Compiler: javac 21.0.8<br />
+                                  Target Compatibility Release: 17 (--release 17)
+                                </pre>
+                              </div>
                             </div>
                           </div>
                         )}

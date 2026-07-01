@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     const { code, language, input = "" } = body;
 
     // Validate language selection
-    const supportedLanguages = ["javascript", "python", "c", "cpp", "java"]; 
+    const supportedLanguages = ["javascript", "python", "c", "cpp", "java", "javan"]; 
     if (!language || !supportedLanguages.includes(language.toLowerCase())) {
       return NextResponse.json({ error: "Unsupported or missing language" }, { status: 400 });
     }
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
       compileCmd = `g++ "${filePath}" -o "${binaryPath}"`;
       execCmd = `"${binaryPath}"`;
       cleanupFiles.push(filePath, binaryPath);
-    } else if (lang === "java") {
+    } else if (lang === "java" || lang === "javan") {
       // For Java, we can write a file named Main_${uniqueId}.java and replace the class name in code with Main_${uniqueId}
       const className = `Main_${uniqueId}`;
       filename = `${className}.java`;
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
       }
       
       fs.writeFileSync(filePath, modifiedCode);
-      compileCmd = `javac "${filePath}"`;
+      compileCmd = `javac --release 17 "${filePath}"`;
       execCmd = `java -cp "${TEMP_DIR}" ${className}`;
       
       cleanupFiles.push(filePath, path.join(TEMP_DIR, `${className}.class`));
@@ -121,8 +121,10 @@ export async function POST(req: Request) {
         });
 
         // Write input to stdin
-        if (input && child.stdin) {
-          child.stdin.write(input);
+        if (child.stdin) {
+          if (input) {
+            child.stdin.write(input);
+          }
           child.stdin.end();
         }
       });
