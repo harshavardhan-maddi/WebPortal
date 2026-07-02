@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import { Toaster } from "@/components/ui/toaster";
 import CollegeLogo from "@/components/CollegeLogo";
 import IntroSplash from "@/components/IntroSplash";
+import PWARegister from "@/components/PWARegister";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -12,13 +13,15 @@ export const metadata: Metadata = {
   title: "Techno Elite Web Portal | Advanced Assessment Platform",
   description: "Advanced Assessment Platform for Future Tech Professionals. Cyber Security, FSD, AI & ML, and Data Science quizzes.",
   keywords: ["Quiz", "Assessment", "Cyber Security", "FSD", "AI", "ML", "Data Science", "Techno Elite"],
+  manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/college_logo.png" },
-      { url: "/college_logo.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico" },
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/college_logo.png",
-    apple: "/college_logo.png",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   }
 };
 
@@ -30,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.className} selection:bg-cyan-500/30`}>
+        <PWARegister />
         <IntroSplash />
         <CollegeLogo />
         <Navbar />
@@ -44,3 +48,4 @@ export default function RootLayout({
     </html>
   );
 }
+
