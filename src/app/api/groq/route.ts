@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-70b-versatile",
         messages: [
           { role: "system", content: "You are a specialized JSON generator. Output only raw JSON arrays." },
           { role: "user", content: prompt }
