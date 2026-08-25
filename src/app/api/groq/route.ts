@@ -18,16 +18,18 @@ export async function POST(req: Request) {
       You are an expert Quiz Generator. 
       Analyze the following text extracted from a PDF and extract ALL multiple-choice questions.
       
-      CRITICAL: Return ONLY a raw JSON array of objects. No markdown formatting, no "here is your JSON", no code blocks.
+      CRITICAL: You must respond in pure JSON format.
       
-      Format:
-      [
-        {
-          "text": "The full question text here",
-          "options": ["Option A", "Option B", "Option C", "Option D"],
-          "correctAnswer": 0
-        }
-      ]
+      Format your response EXACTLY like this JSON object:
+      {
+        "questions": [
+          {
+            "text": "The full question text here",
+            "options": ["Option A", "Option B", "Option C", "Option D"],
+            "correctAnswer": 0
+          }
+        ]
+      }
 
       Text:
       ${processedText}
@@ -41,8 +43,9 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "openai/gpt-oss-120b",
+        response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: "You are a specialized JSON generator. Output only raw JSON arrays." },
+          { role: "system", content: "You are a specialized JSON generator. You must output valid JSON." },
           { role: "user", content: prompt }
         ],
         temperature: 0.1,
@@ -57,15 +60,19 @@ export async function POST(req: Request) {
     }
 
     const rawOutput = data.choices[0].message.content.trim();
-    const startIndex = rawOutput.indexOf('[');
-    const endIndex = rawOutput.lastIndexOf(']') + 1;
     
-    if (startIndex === -1 || endIndex === 0) {
+    let questions;
+    try {
+      const parsed = JSON.parse(rawOutput);
+      questions = parsed.questions || parsed;
+      
+      if (!Array.isArray(questions)) {
+        throw new Error("Extracted JSON does not contain a questions array");
+      }
+    } catch (parseError) {
+      console.error("Failed to parse JSON:", rawOutput);
       return NextResponse.json({ error: "Failed to extract valid JSON from AI response." }, { status: 500 });
     }
-
-    const cleanJson = rawOutput.substring(startIndex, endIndex);
-    const questions = JSON.parse(cleanJson);
 
     return NextResponse.json({ questions });
   } catch (error: any) {
