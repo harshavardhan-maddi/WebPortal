@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: "llama3-8b-8192",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: "You are a specialized JSON generator. Output only raw JSON arrays." },
           { role: "user", content: prompt }
