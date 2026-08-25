@@ -73,7 +73,7 @@ export default function QuizCreationPage() {
   }, []);
 
 
-  const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY;
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
   const loadScript = (src: string) => {
     return new Promise((resolve, reject) => {
