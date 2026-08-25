@@ -72,6 +72,7 @@ export default function AdminManagementPage() {
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedQuizForReport, setSelectedQuizForReport] = useState<any>(null);
+  const [reportFilter, setReportFilter] = useState<"all" | "completed" | "not_attempted">("all");
   // Edit Student States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
@@ -860,7 +861,7 @@ export default function AdminManagementPage() {
                       </div>
                       <Button 
                         variant="ghost" 
-                        onClick={(e) => { e.stopPropagation(); setSelectedQuizForReport(q); setIsReportModalOpen(true); }} 
+                        onClick={(e) => { e.stopPropagation(); setSelectedQuizForReport(q); setReportFilter("all"); setIsReportModalOpen(true); }} 
                         className="text-emerald-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-emerald-500/10 rounded-xl mr-2 text-xs font-bold flex items-center gap-2"
                       >
                         <FileDown className="w-4 h-4" /> Report
@@ -1129,72 +1130,117 @@ export default function AdminManagementPage() {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
-
-        {/* Test Report Modal */}
+        </AnimatePresence>        {/* Test Report Modal */}
         <AnimatePresence>
-          {isReportModalOpen && selectedQuizForReport && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-4xl max-h-[85vh] glass rounded-[3rem] border border-white/10 shadow-2xl flex flex-col">
-                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/5 shrink-0 rounded-t-[3rem]">
-                  <div>
-                    <h2 className="text-3xl font-black text-white">{selectedQuizForReport.title} Report</h2>
-                    <p className="text-sm text-muted-foreground mt-1 uppercase font-bold tracking-widest">{selectedQuizForReport.domain === 'all' ? 'All Domains' : selectedQuizForReport.domain} | {selectedQuizForReport.batch}</p>
+          {isReportModalOpen && selectedQuizForReport && (() => {
+            const reportStudents = students.filter(s => selectedQuizForReport.domain === 'all' || s.domain === selectedQuizForReport.domain);
+            const completedStudents = reportStudents.filter(s => results.some(r => r.roll_number === s.roll_number && r.quiz_id === selectedQuizForReport.id && r.time_taken > 0));
+            const notAttemptedStudents = reportStudents.filter(s => !results.some(r => r.roll_number === s.roll_number && r.quiz_id === selectedQuizForReport.id && r.time_taken > 0));
+            const displayStudents = reportFilter === "completed" ? completedStudents : reportFilter === "not_attempted" ? notAttemptedStudents : reportStudents;
+            return (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-4xl max-h-[90vh] glass rounded-[3rem] border border-white/10 shadow-2xl flex flex-col">
+                  {/* Header */}
+                  <div className="p-8 border-b border-white/5 flex justify-between items-start bg-white/5 shrink-0 rounded-t-[3rem]">
+                    <div>
+                      <h2 className="text-3xl font-black text-white">{selectedQuizForReport.title}</h2>
+                      <p className="text-sm text-muted-foreground mt-1 uppercase font-bold tracking-widest">{selectedQuizForReport.domain === 'all' ? 'All Domains' : selectedQuizForReport.domain} · {selectedQuizForReport.batch}</p>
+                    </div>
+                    <Button variant="ghost" onClick={() => setIsReportModalOpen(false)} className="rounded-full w-12 h-12 p-0 hover:bg-white/10 text-white shrink-0">✕</Button>
                   </div>
-                  <Button variant="ghost" onClick={() => setIsReportModalOpen(false)} className="rounded-full w-12 h-12 p-0 hover:bg-white/10 text-white">✕</Button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-8 space-y-4 premium-scroll">
-                  {students.filter(s => selectedQuizForReport.domain === 'all' || s.domain === selectedQuizForReport.domain).map(student => {
-                    const attempt = results.find(r => r.roll_number === student.roll_number && r.quiz_id === selectedQuizForReport.id);
-                    return (
-                      <div key={student.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
-                        <div>
-                          <p className="font-bold text-white">{student.roll_number}</p>
-                          {isNameConfirmed(student.name, student.roll_number) && (
-                            <p className="text-xs text-muted-foreground">{student.name}</p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          {attempt ? (
-                            <div>
-                              <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest mb-1">Completed</p>
-                              <p className="text-xl font-black text-white">{attempt.score}%</p>
-                            </div>
-                          ) : (
-                            <p className="text-xs text-orange-400 font-bold uppercase tracking-widest">Not Attempted</p>
-                          )}
-                        </div>
+
+                  {/* Stats + Tabs */}
+                  <div className="px-8 pt-6 pb-4 shrink-0 space-y-4">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center">
+                        <p className="text-3xl font-black text-white">{reportStudents.length}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">Total Students</p>
                       </div>
-                    );
-                  })}
-                </div>
-                <div className="p-8 border-t border-white/5 bg-white/5 shrink-0 rounded-b-[3rem]">
-                  <Button 
-                    onClick={() => {
-                      const relevantStudents = students.filter(s => selectedQuizForReport.domain === 'all' || s.domain === selectedQuizForReport.domain);
-                      const reportData = relevantStudents.map(student => {
-                        const attempt = results.find(r => r.roll_number === student.roll_number && r.quiz_id === selectedQuizForReport.id && r.time_taken > 0);
-                        return {
-                          Name: student.name || 'Not Confirmed',
-                          'Roll Number': student.roll_number,
-                          Status: attempt ? 'Completed' : 'Not Attempted',
-                          Score: attempt ? attempt.score : 'Not Attempted',
-                        };
-                      });
-                      const worksheet = XLSX.utils.json_to_sheet(reportData);
-                      const workbook = XLSX.utils.book_new();
-                      XLSX.utils.book_append_sheet(workbook, worksheet, "Test Report");
-                      XLSX.writeFile(workbook, `${selectedQuizForReport.title.replace(/\\s+/g, '_')}_Report.xlsx`);
-                    }} 
-                    className="w-full h-14 rounded-2xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 text-lg shadow-lg"
-                  >
-                    <Download className="w-5 h-5" /> Download Excel Report
-                  </Button>
-                </div>
-              </motion.div>
-            </div>
-          )}
+                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+                        <p className="text-3xl font-black text-emerald-400">{completedStudents.length}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mt-1">Completed</p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-center">
+                        <p className="text-3xl font-black text-orange-400">{notAttemptedStudents.length}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-500 mt-1">Not Attempted</p>
+                      </div>
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
+                      {([
+                        { key: "all", label: `All (${reportStudents.length})` },
+                        { key: "completed", label: `Completed (${completedStudents.length})` },
+                        { key: "not_attempted", label: `Not Attempted (${notAttemptedStudents.length})` },
+                      ] as const).map(tab => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setReportFilter(tab.key)}
+                          className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${reportFilter === tab.key ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-white'}`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Student List */}
+                  <div className="flex-1 overflow-y-auto px-8 pb-4 space-y-3 premium-scroll">
+                    {displayStudents.length === 0 ? (
+                      <div className="py-12 text-center text-muted-foreground font-bold italic">No students in this category.</div>
+                    ) : displayStudents.map(student => {
+                      const attempt = results.find(r => r.roll_number === student.roll_number && r.quiz_id === selectedQuizForReport.id && r.time_taken > 0);
+                      return (
+                        <div key={student.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all">
+                          <div>
+                            <p className="font-bold text-white">{student.roll_number}</p>
+                            {isNameConfirmed(student.name, student.roll_number) && (
+                              <p className="text-xs text-muted-foreground">{student.name}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {attempt ? (
+                              <div>
+                                <p className="text-[10px] text-emerald-400 font-black uppercase tracking-widest mb-1">Completed</p>
+                                <p className={`text-xl font-black ${attempt.score >= 70 ? 'text-emerald-400' : 'text-orange-400'}`}>{attempt.score}%</p>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-orange-400 font-bold uppercase tracking-widest">Not Attempted</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Download */}
+                  <div className="p-8 border-t border-white/5 bg-white/5 shrink-0 rounded-b-[3rem]">
+                    <Button
+                      onClick={() => {
+                        const reportData = reportStudents.map(student => {
+                          const attempt = results.find(r => r.roll_number === student.roll_number && r.quiz_id === selectedQuizForReport.id && r.time_taken > 0);
+                          return {
+                            Name: student.name || 'Not Confirmed',
+                            'Roll Number': student.roll_number,
+                            Status: attempt ? 'Completed' : 'Not Attempted',
+                            Score: attempt ? `${attempt.score}%` : 'N/A',
+                          };
+                        });
+                        const worksheet = XLSX.utils.json_to_sheet(reportData);
+                        const workbook = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(workbook, worksheet, "Test Report");
+                        XLSX.writeFile(workbook, `${selectedQuizForReport.title.replace(/\s+/g, '_')}_Report.xlsx`);
+                      }}
+                      className="w-full h-14 rounded-2xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 text-lg shadow-lg"
+                    >
+                      <Download className="w-5 h-5" /> Download Full Excel Report
+                    </Button>
+                  </div>
+                </motion.div>
+              </div>
+            );
+          })()}
         </AnimatePresence>
 
         {/* Quiz Preview Modal */}
