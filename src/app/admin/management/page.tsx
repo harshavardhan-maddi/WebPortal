@@ -526,14 +526,21 @@ export default function AdminManagementPage() {
     setIsSubmittingOverride(true);
     try {
       // 1. Fetch existing result for the selected student and quiz
-      const { data: existingResult, error: fetchError } = await supabase
+      // Prefer the completed row (time_taken > 0). Multiple rows can exist due to
+      // the placeholder record inserted at quiz start, so use .order+.limit instead
+      // of .maybeSingle() to avoid "multiple rows" errors.
+      const { data: resultRows, error: fetchError } = await supabase
         .from('results')
         .select('*')
         .eq('roll_number', overrideRollNumber)
         .eq('quiz_id', overrideQuizId)
-        .maybeSingle();
+        .order('time_taken', { ascending: false }); // completed rows first
 
       if (fetchError) throw fetchError;
+
+      // Pick the completed record; if none, fall back to any placeholder row
+      const existingResult = resultRows?.find(r => r.time_taken > 0) || resultRows?.[0] || null;
+
 
       // 2. Update or Insert
       if (existingResult) {
