@@ -29,6 +29,7 @@ const domains = [
 const batches = [
   { id: "3rd Year Super 50", title: "3rd Year Super 50", description: "Cyber Security, FSD, AI/ML, Data Science" },
   { id: "4th Year Super 50", title: "4th Year Super 50", description: "Final Year Advanced Training" },
+  { id: "Interns", title: "Interns", description: "Internship & Practical Training Program" },
 ];
 
 

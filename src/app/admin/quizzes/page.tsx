@@ -255,7 +255,7 @@ export default function QuizCreationPage() {
 
     setIsUploading(true);
     try {
-      const targetDomains = quizData.batch === "3rd Year Super 50" ? ["3rd-year-super-50"] : ["all"];
+      const targetDomains = quizData.batch === "3rd Year Super 50" ? ["3rd-year-super-50"] : (quizData.batch === "Interns" ? ["interns"] : ["all"]);
       const inserts = targetDomains.map(dom => ({
         title: quizData.title,
         domain: dom,
@@ -300,7 +300,7 @@ export default function QuizCreationPage() {
                 <Label>Target Batch</Label>
                 {adminSession?.role === "super-admin" ? (
                   <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-                    {["3rd Year Super 50", "4th Year Super 50"].map((b) => (
+                    {["3rd Year Super 50", "4th Year Super 50", "Interns"].map((b) => (
                       <button
                         key={b}
                         onClick={() => setQuizData({...quizData, batch: b})}
@@ -334,7 +334,7 @@ export default function QuizCreationPage() {
               <div className="space-y-2">
                 <Label>Assigned Domains</Label>
                 <div className="h-14 px-6 flex items-center bg-white/5 border border-white/10 rounded-2xl font-bold text-muted-foreground italic">
-                  {quizData.batch === "3rd Year Super 50" ? "3rd Year Super 50" : "General Access"}
+                  {quizData.batch === "3rd Year Super 50" ? "3rd Year Super 50" : (quizData.batch === "Interns" ? "Interns Access" : "General Access")}
                 </div>
               </div>
             </div>

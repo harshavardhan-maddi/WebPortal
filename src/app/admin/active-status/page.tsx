@@ -124,7 +124,7 @@ export default function ActiveStatusPage() {
       <div className="flex flex-wrap gap-4 items-center">
         {adminSession?.role === "super-admin" && (
           <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-            {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
+            {["3rd Year Super 50", "4th Year Super 50", "Interns"].map((batch) => (
               <button
                 key={batch}
                 onClick={() => {
@@ -201,7 +201,7 @@ export default function ActiveStatusPage() {
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Domain</span>
                     <span className="font-bold text-primary uppercase tracking-tighter">
-                      {student.batch === "4th Year Super 50" ? "General" : student.domain?.replace('-', ' ')}
+                      {student.batch === "4th Year Super 50" ? "General" : (student.batch === "Interns" ? "Interns" : student.domain?.replace('-', ' '))}
                     </span>
                   </div>
 

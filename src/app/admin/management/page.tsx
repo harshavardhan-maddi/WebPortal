@@ -154,7 +154,7 @@ export default function AdminManagementPage() {
 
   const handleAddStudent = async () => {
     if (!newRollNumber) return;
-    const domainToAssign = selectedBatch === "3rd Year Super 50" ? "3rd-year-super-50" : (selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : "general"));
+    const domainToAssign = selectedBatch === "3rd Year Super 50" ? "3rd-year-super-50" : (selectedBatch === "Interns" ? "interns" : (selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : "general")));
     const { error } = await supabase.from('students').insert([{ 
       roll_number: newRollNumber, 
       domain: domainToAssign, 
@@ -230,7 +230,7 @@ export default function AdminManagementPage() {
       return;
     }
 
-    const domainToAssign = selectedBatch === "3rd Year Super 50" ? "3rd-year-super-50" : (selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : "general"));
+    const domainToAssign = selectedBatch === "3rd Year Super 50" ? "3rd-year-super-50" : (selectedBatch === "Interns" ? "interns" : (selectedBatch === "4th Year Super 50" ? "general" : (adminSession?.role === "domain-admin" ? adminSession.domain : "general")));
     
     const studentsToInsert = newRolls.map(roll => ({
       roll_number: roll,
@@ -674,7 +674,7 @@ export default function AdminManagementPage() {
 
           {adminSession?.role === "super-admin" && (
             <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 shadow-xl">
-              {["3rd Year Super 50", "4th Year Super 50"].map((batch) => (
+              {["3rd Year Super 50", "4th Year Super 50", "Interns"].map((batch) => (
                 <button
                   key={batch}
                   onClick={() => {

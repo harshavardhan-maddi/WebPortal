@@ -308,7 +308,7 @@ export default function SettingsPage() {
                               <Lock className="w-3.5 h-3.5" /> {showPasswords[admin.id] ? admin.password : "••••••••"}
                             </span>
                             <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[10px] uppercase font-black tracking-widest border border-primary/20">
-                              {admin.batch === "4th Year Super 50" ? "4th Year" : admin.domain.replace('-', ' ')}
+                              {admin.batch === "4th Year Super 50" ? "4th Year" : (admin.batch === "Interns" ? "Interns" : admin.domain.replace('-', ' '))}
                             </span>
                             {admin.batch && (
                               <span className="px-2.5 py-1 rounded-lg bg-white/5 text-muted-foreground text-[10px] uppercase font-black tracking-widest border border-white/10">
@@ -539,18 +539,19 @@ export default function SettingsPage() {
                         setNewAdmin({
                           ...newAdmin, 
                           batch: batch,
-                          domain: batch === "4th Year Super 50" ? "general" : "3rd-year-super-50"
+                          domain: batch === "4th Year Super 50" ? "general" : (batch === "Interns" ? "interns" : "3rd-year-super-50")
                         });
                       }}
                     >
                       <option value="3rd Year Super 50">3rd Year Super 50</option>
                       <option value="4th Year Super 50">4th Year Super 50</option>
+                      <option value="Interns">Interns</option>
                     </select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground ml-1">Target Domain</Label>
                     <div className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 flex items-center text-sm font-bold text-muted-foreground select-none">
-                      {newAdmin.batch === "4th Year Super 50" ? "General Access (4th Year)" : "3rd Year Super 50"}
+                      {newAdmin.batch === "4th Year Super 50" ? "General Access (4th Year)" : (newAdmin.batch === "Interns" ? "Interns Access" : "3rd Year Super 50")}
                     </div>
                   </div>
                 </div>
