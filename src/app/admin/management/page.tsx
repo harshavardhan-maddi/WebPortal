@@ -507,7 +507,8 @@ export default function AdminManagementPage() {
 
 
   const getStudentScoreForQuiz = (rollNumber: string, quizId: string) => {
-    const result = results.find(r => r.roll_number === rollNumber && r.quiz_id === quizId);
+    // Skip placeholder records inserted at quiz start (time_taken === 0 means not yet submitted)
+    const result = results.find(r => r.roll_number === rollNumber && r.quiz_id === quizId && r.time_taken > 0);
     return result ? result.score : null;
   };
 
@@ -600,9 +601,10 @@ export default function AdminManagementPage() {
     (selectedDomain ? q.domain === selectedDomain : true)
   );
 
-  const filteredResults = results.filter(r => 
-    (r.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) || 
-     r.quizzes?.title?.toLowerCase().includes(searchQuery.toLowerCase())) && 
+  const filteredResults = results.filter(r =>
+    r.time_taken > 0 && // exclude incomplete placeholder records
+    (r.roll_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     r.quizzes?.title?.toLowerCase().includes(searchQuery.toLowerCase())) &&
     (selectedDomain && selectedBatch === "3rd Year Super 50" ? r.domain === selectedDomain : true)
   );
 
@@ -1165,7 +1167,7 @@ export default function AdminManagementPage() {
                     onClick={() => {
                       const relevantStudents = students.filter(s => selectedQuizForReport.domain === 'all' || s.domain === selectedQuizForReport.domain);
                       const reportData = relevantStudents.map(student => {
-                        const attempt = results.find(r => r.roll_number === student.roll_number && r.quiz_id === selectedQuizForReport.id);
+                        const attempt = results.find(r => r.roll_number === student.roll_number && r.quiz_id === selectedQuizForReport.id && r.time_taken > 0);
                         return {
                           Name: student.name || 'Not Confirmed',
                           'Roll Number': student.roll_number,
