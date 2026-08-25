@@ -73,8 +73,6 @@ export default function QuizCreationPage() {
   }, []);
 
 
-  const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
   const loadScript = (src: string) => {
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -89,62 +87,20 @@ export default function QuizCreationPage() {
     if (!text || text.trim().length < 10) {
       throw new Error("No readable text found in PDF. Please ensure it is a text-based document.");
     }
-
-    const processedText = text.substring(0, 30000);
-
-    const prompt = `
-      You are an expert Quiz Generator. 
-      Analyze the following text extracted from a PDF and extract ALL multiple-choice questions.
-      
-      CRITICAL: Return ONLY a raw JSON array of objects. No markdown formatting, no "here is your JSON", no code blocks.
-      
-      Format:
-      [
-        {
-          "text": "The full question text here",
-          "options": ["Option A", "Option B", "Option C", "Option D"],
-          "correctAnswer": 0
-        }
-      ]
-
-      Text:
-      ${processedText}
-    `;
-
+    
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const response = await fetch("/api/groq", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${GROQ_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: "You are a specialized JSON generator. Output only raw JSON arrays." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.1,
-          stream: false
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
       });
-
+      
       const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(`Groq AI Error: ${data.error.message}`);
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Failed to process PDF with Groq");
       }
-
-      const rawOutput = data.choices[0].message.content.trim();
-      const startIndex = rawOutput.indexOf('[');
-      const endIndex = rawOutput.lastIndexOf(']') + 1;
       
-      if (startIndex === -1 || endIndex === 0) {
-        throw new Error("Failed to extract valid JSON from AI response.");
-      }
-
-      const cleanJson = rawOutput.substring(startIndex, endIndex);
-      return JSON.parse(cleanJson);
+      return data.questions;
     } catch (error: any) {
       console.error("AI Analysis Error:", error);
       throw error;
